@@ -13,7 +13,7 @@
     "seed": "node --experimental-sqlite scripts/seed.mjs",
     "verify": "node --experimental-sqlite scripts/verify-chain.mjs",
     "tamper": "node --experimental-sqlite scripts/tamper.mjs",
-    "test": "node --experimental-sqlite --test tests/ledger.test.js tests/measurement.test.js"
+    "test": "node --experimental-sqlite --test tests/ledger.test.js tests/workflow.test.js tests/measurement.test.js"
   },
   "dependencies": {}
 }

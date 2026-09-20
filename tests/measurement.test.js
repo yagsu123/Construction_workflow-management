@@ -60,8 +60,9 @@ test('a measurement chains onto the same ledger as approvals', () => {
 
 test('only the JE may record a measurement', () => {
   const db = freshDb();
-  assert.throws(() => recordMeasurement(db, mb({ role: 'FIN' })), /Only the JE/);
-  assert.throws(() => recordMeasurement(db, mb({ role: 'EE' })), /Only the JE/);
+  for (const role of ['AE', 'FIN', 'EE']) {
+    assert.throws(() => recordMeasurement(db, mb({ role })), /Only the JE/);
+  }
 });
 
 test('coordinates are validated', () => {
@@ -80,6 +81,7 @@ test('a photo is required', () => {
 test('the measurement book closes once payment is triggered', () => {
   const db = freshDb();
   act(db, { projectId: 1, role: 'JE', action: 'submit' });
+  act(db, { projectId: 1, role: 'AE', action: 'test_check' });
   act(db, { projectId: 1, role: 'FIN', action: 'verify' });
   act(db, { projectId: 1, role: 'EE', action: 'approve' });
   act(db, { projectId: 1, role: 'EE', action: 'trigger_payment' });

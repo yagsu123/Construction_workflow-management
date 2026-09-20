@@ -50,7 +50,7 @@ export function ago(iso) {
 }
 
 export const STATUS_TONE = {
-  SUBMITTED: '', VERIFIED: 'ok', APPROVED: 'ok',
+  SUBMITTED: '', TEST_CHECKED: 'ok', VERIFIED: 'ok', APPROVED: 'ok',
   PAYMENT_TRIGGERED: 'ok', REJECTED: 'danger',
 };
 
@@ -78,6 +78,7 @@ export function mountHeader(current, { onRoleChange } = {}) {
       <label for="roleSelect">Acting as</label>
       <select id="roleSelect">
         <option value="JE"${role === 'JE' ? ' selected' : ''}>JE — Junior Engineer</option>
+        <option value="AE"${role === 'AE' ? ' selected' : ''}>AE — Assistant Engineer / SDO</option>
         <option value="FIN"${role === 'FIN' ? ' selected' : ''}>FIN — Finance / Accounts</option>
         <option value="EE"${role === 'EE' ? ' selected' : ''}>EE — Executive Engineer</option>
       </select>

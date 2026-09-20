@@ -30,11 +30,19 @@ and `git clone && npm start` now works on any machine with Node 22, with no netw
 
 ## Roles (hardcoded, no real auth)
 
-1. **JE** — Junior Engineer: creates DPRs, uploads geo-tagged e-MB entries
-2. **FIN** — Finance / Accounts: verifies budget
-3. **EE** — Executive Engineer: final approval, triggers the simulated smart contract
+1. **JE** — Junior Engineer: creates DPRs, records geo-tagged e-MB entries from site
+2. **AE** — Assistant Engineer / Sub-Divisional Officer: **test-checks** the JE's physical
+   measurements, re-verifying a prescribed percentage before the file may move for payment
+3. **FIN** — Finance / Accounts: verifies the claim against the sanctioned budget head
+4. **EE** — Executive Engineer: final approval, triggers the simulated smart contract
 
 Switched via a dropdown in the header. No login, no passwords, no sessions.
+
+**Revision 2 added the AE.** The first cut routed the JE's measurements straight to Finance,
+which is not how an Indian PWD file actually moves — the AE test-check is mandatory, and
+omitting it would misrepresent both the process and where files really get stuck. It is also
+the gate most often blamed for delay and most often bypassed in corruption cases, which makes
+it the single most worthwhile gate to instrument.
 
 ## Ledger approach
 
@@ -58,15 +66,18 @@ Not attempted, and not to be attempted later:
 - Real blockchain SDK / wallet / gas / testnet deployment
 - PFMS or State Treasury integration (payment trigger is a logged simulated event)
 - Real GIS / map tile APIs (coordinates shown as text + an OpenStreetMap link)
-- Multi-department parallel clearances (the workflow is strictly linear: JE → FIN → EE)
+- Multi-department parallel clearances (the workflow is strictly linear: JE → AE → FIN → EE)
 - File storage beyond the local `public/uploads/` folder
 - Real authentication, RBAC, or audit of *who* switched roles
 
 ## Stage machine
 
 ```
-DRAFT -> PENDING_FINANCE -> PENDING_EE -> APPROVED -> PAYMENT_TRIGGERED
+DRAFT -> PENDING_AE -> PENDING_FINANCE -> PENDING_EE -> APPROVED -> PAYMENT_TRIGGERED
 ```
 
-Rejection at FIN or EE returns the project to `DRAFT` and is recorded on the ledger as a
+Rejection at AE, FIN or EE returns the project to `DRAFT` and is recorded on the ledger as a
 `REJECTED` entry — rejections are never silently dropped.
+
+Exactly one role holds each stage, enforced by a test: a file can never be actionable by two
+people at once, and the AE gate cannot be bypassed by acting as Finance early.

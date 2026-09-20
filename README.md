@@ -32,17 +32,21 @@ Then open <http://localhost:3000>.
 
 ## How it works
 
-Three hardcoded roles, switched from a dropdown — no login:
+Four hardcoded roles, switched from a dropdown — no login:
 
 ```
-JE (uploads geo-tagged MB images)
-  -> Finance / Accounts (budget verification)
-     -> Executive Engineer (final approval)
-        -> Smart contract (payment trigger)
+JE  (records geo-tagged MB entries from site)
+  -> AE / SDO (test-check: re-measures a prescribed percentage)
+     -> Finance / Accounts (budget verification)
+        -> Executive Engineer (final approval)
+           -> Smart contract (payment trigger)
 ```
 
-A rejection at Finance or EE sends the project back to the JE, and the rejection itself is
-written to the ledger — it cannot be quietly dropped.
+The **AE test-check is mandatory in Indian PWD practice** and cannot be bypassed here — Finance
+acting on a file still awaiting test-check is refused outright.
+
+A rejection at the AE, Finance or the EE sends the project back to the JE, and the rejection
+itself is written to the ledger — it cannot be quietly dropped.
 
 Every approval and every measurement appends one entry to a single shared chain:
 
@@ -69,12 +73,15 @@ Phases 0–2 of 6 complete.
 
 - **Phase 0** — stack locked, scaffold up, health check green
 - **Phase 1** — schema, `appendLedgerEntry()`, `verifyChain()`, 11 passing tests
-- **Phase 2** — DPR submission, stage stepper, role switcher, approve/reject with
+- **Phase 2** — DPR submission, stage stepper, four-role switcher, approve/reject with
   rejections looping back to the JE and recorded on the ledger
 - **Phase 3** — geo-tagged e-MB capture: photo + GPS fix + note, with the photo's own
   SHA-256 inside the ledger payload, so swapping the image file is detectable too
 
 Next: the ledger viewer and delay dashboard (Phase 4), seed data (Phase 5), demo rehearsal (Phase 6).
+
+The full phase plan, including the Indian-context revision that introduced the AE gate, is in
+[`docs/build-plan.md`](./docs/build-plan.md).
 
 ## Not in scope
 

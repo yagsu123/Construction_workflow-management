@@ -10,7 +10,15 @@ import { STAGES, STAGE_ORDER, SLA_DAYS } from './config.js';
  */
 export const TRANSITIONS = {
   DRAFT: {
-    JE: [{ action: 'submit', label: 'Submit to Finance', status: 'SUBMITTED', to: 'PENDING_FINANCE', tone: 'primary' }],
+    JE: [{ action: 'submit', label: 'Submit for AE test-check', status: 'SUBMITTED', to: 'PENDING_AE', tone: 'primary' }],
+  },
+  // The AE re-measures a prescribed percentage of the JE's entries. Mandatory in PWD practice,
+  // and the gate most often blamed for delay - which is exactly why it is instrumented here.
+  PENDING_AE: {
+    AE: [
+      { action: 'test_check', label: 'Test-check passed', status: 'TEST_CHECKED', to: 'PENDING_FINANCE', tone: 'primary' },
+      { action: 'reject', label: 'Measurement mismatch', status: 'REJECTED', to: 'DRAFT', tone: 'danger', needsComment: true },
+    ],
   },
   PENDING_FINANCE: {
     FIN: [
