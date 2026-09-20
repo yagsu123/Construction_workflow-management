@@ -56,7 +56,7 @@ export async function handleApi(req, res, url) {
     const chain = verifyChain(db);
     const anchors = checkAnchors(db);
     return json(res, 200, {
-      ok: true, service: 'pwd-infra-workflow', phase: 3, node: process.version,
+      ok: true, service: 'pwd-infra-workflow', phase: 4, node: process.version,
       chain: { length: chain.length, valid: chain.valid, first_break: chain.first_break },
       anchors: { checked: anchors.checked, valid: anchors.valid },
       time: new Date().toISOString(),
@@ -128,6 +128,34 @@ export async function handleApi(req, res, url) {
       project: decorate(db, result.project),
       entry: { seq: result.entry.seq, hash: result.entry.hash, prev_hash: result.entry.prev_hash },
       photo: saved,
+    });
+  }
+
+  // --- delay dashboard ------------------------------------------------------------------------
+  if (pathname === '/api/delays' && method === 'GET') {
+    const projects = listProjects(db);
+    const live = projects.filter(p => p.current_stage !== 'PAYMENT_TRIGGERED');
+
+    // Where do files actually die? Attribute waiting time to the role holding each file.
+    const byRole = {};
+    for (const p of live) {
+      if (!p.waiting_on) continue;
+      const r = (byRole[p.waiting_on] ??= { role: p.waiting_on, files: 0, overdue: 0, total_days: 0, worst: 0 });
+      r.files++;
+      r.total_days += p.days_in_stage;
+      r.worst = Math.max(r.worst, p.days_in_stage);
+      if (p.overdue) r.overdue++;
+    }
+    for (const r of Object.values(byRole)) r.avg_days = Math.round((r.total_days / r.files) * 10) / 10;
+
+    return json(res, 200, {
+      sla_days: SLA_DAYS,
+      total: projects.length,
+      live: live.length,
+      overdue: live.filter(p => p.overdue).length,
+      completed: projects.length - live.length,
+      by_role: Object.values(byRole).sort((a, b) => b.overdue - a.overdue || b.avg_days - a.avg_days),
+      projects: projects.sort((a, b) => Number(b.overdue) - Number(a.overdue) || b.days_in_stage - a.days_in_stage),
     });
   }
 

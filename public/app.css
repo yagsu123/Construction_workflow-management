@@ -212,3 +212,21 @@ a.plain:hover { text-decoration: underline; }
 }
 .emb > div { flex: 1; min-width: 0; }
 input[type="file"] { padding: 6px; }
+
+/* --- ledger verdict + dashboard ------------------------------------------ */
+.verdict { border-left: 4px solid var(--muted); }
+.verdict.ok { border-left-color: var(--ok); }
+.verdict.danger { border-left-color: var(--danger); }
+.verdict .meta { font-size: 12px; color: var(--muted); margin-top: 4px; }
+
+tr.broken td { background: color-mix(in srgb, var(--danger) 9%, transparent); }
+
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 16px; }
+.tile { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; }
+.tile .k { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+.tile .v { font-size: 28px; font-weight: 600; letter-spacing: -0.02em; line-height: 1.2; margin-top: 2px; }
+.tile.alarm .v { color: var(--danger); }
+
+.bar { height: 8px; border-radius: 99px; background: color-mix(in srgb, var(--muted) 20%, transparent); overflow: hidden; min-width: 90px; }
+.bar > span { display: block; height: 100%; background: var(--accent); }
+.bar > span.over { background: var(--danger); }

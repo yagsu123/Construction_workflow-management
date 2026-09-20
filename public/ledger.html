@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ledger — PWD Infrastructure Workflow</title>
+<link rel="stylesheet" href="/app.css">
+</head>
+<body>
+<main>
+  <h1>Ledger</h1>
+  <p class="lede">Every approval and every site measurement, in one append-only chain.</p>
+  <div id="status"></div>
+  <div class="card" style="padding:0;overflow-x:auto">
+    <table>
+      <thead>
+        <tr><th>Seq</th><th>Entry</th><th>Project</th><th>Who</th><th>What</th><th>When</th><th>prev_hash → hash</th></tr>
+      </thead>
+      <tbody id="rows"><tr><td colspan="7" class="empty">Loading&hellip;</td></tr></tbody>
+    </table>
+  </div>
+</main>
+
+<script type="module">
+import { mountHeader, api, esc, when, shortHash } from '/common.js';
+import { coords, osmLink } from '/emb.js';
+
+mountHeader('/ledger.html');
+const status = document.getElementById('status');
+const rows = document.getElementById('rows');
+
+function banner(d) {
+  if (d.length === 0) {
+    return `<div class="card"><p class="muted" style="margin:0">The chain is empty. Run <code>npm run seed</code>, or create a project.</p></div>`;
+  }
+  if (d.valid) {
+    return `<div class="card verdict ok">
+      <div><strong>Chain valid</strong> — all ${d.length} entries recompute, and ${d.anchors.checked}
+        published tip${d.anchors.checked === 1 ? '' : 's'} agree.</div>
+      <div class="meta mono">tip ${esc(shortHash(d.tip))}</div>
+    </div>`;
+  }
+  if (!d.anchors.valid && d.chain_valid) {
+    const m = d.anchors.mismatches[0];
+    return `<div class="card verdict danger">
+      <div><strong>History rewritten</strong> — the chain recomputes cleanly, but it no longer matches
+        what was published. Someone edited a record and re-signed everything after it.</div>
+      <div class="meta mono">at length ${m.length}: published ${esc(shortHash(m.tip))},
+        chain now gives ${esc(shortHash(m.current ?? 'missing'))}</div>
+    </div>`;
+  }
+  return `<div class="card verdict danger">
+    <div><strong>Chain broken</strong> — first break at seq ${d.first_break}.
+      Every record from there on is no longer trustworthy.</div>
+    <div class="meta">${d.breaks.length} entr${d.breaks.length === 1 ? 'y' : 'ies'} affected:
+      ${esc(d.breaks.map(b => `seq ${b.seq} (${b.reasons.join(', ')})`).join(' · '))}</div>
+  </div>`;
+}
+
+function what(e) {
+  if (e.entry_type === 'MEASUREMENT') {
+    const bad = e.photo_check && !e.photo_check.matches;
+    return `<a class="mono" href="${esc(osmLink(e.lat, e.lng))}" target="_blank" rel="noopener">${esc(coords(e.lat, e.lng))}</a>
+      ${bad ? '<div><span class="pill danger">photo swapped</span></div>' : ''}
+      ${e.note ? `<div class="muted" style="font-size:12px">${esc(e.note)}</div>` : ''}`;
+  }
+  return `<span class="pill ${e.status === 'REJECTED' ? 'danger' : e.status === 'SUBMITTED' ? '' : 'ok'}">${esc(e.status.replace(/_/g, ' '))}</span>
+    ${e.comment ? `<div class="muted" style="font-size:12px">${esc(e.comment)}</div>` : ''}`;
+}
+
+api('/api/ledger').then(d => {
+  status.innerHTML = banner(d);
+  if (!d.length) { rows.innerHTML = `<tr><td colspan="7" class="empty">No entries yet.</td></tr>`; return; }
+
+  rows.innerHTML = d.entries.map(e => `
+    <tr class="${e.ok ? '' : 'broken'}">
+      <td class="mono">${e.seq}</td>
+      <td><span class="pill ${e.entry_type === 'MEASUREMENT' ? '' : 'muted'}">${e.entry_type === 'MEASUREMENT' ? 'e-MB' : 'approval'}</span></td>
+      <td><a class="plain" href="/project.html?id=${e.project_id}">#${e.project_id}</a></td>
+      <td><span class="pill">${esc(e.actor_role)}</span></td>
+      <td>${what(e)}</td>
+      <td class="muted" style="font-size:12px;white-space:nowrap">${esc(when(e.timestamp))}</td>
+      <td class="mono" style="font-size:11.5px;white-space:nowrap">
+        ${esc(shortHash(e.prev_hash))}<br>&rarr; ${esc(shortHash(e.hash))}
+        ${e.ok ? '' : `<div class="pill danger" style="margin-top:4px">${esc(e.reasons.join(', '))}</div>`}
+      </td>
+    </tr>`).join('');
+}).catch(err => {
+  rows.innerHTML = `<tr><td colspan="7" class="empty">${esc(err.message)}</td></tr>`;
+});
+</script>
+</body>
+</html>

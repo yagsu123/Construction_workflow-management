@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Delay dashboard — PWD Infrastructure Workflow</title>
+<link rel="stylesheet" href="/app.css">
+</head>
+<body>
+<main>
+  <h1>Delay dashboard</h1>
+  <p class="lede">How long each file has been waiting, and with whom.</p>
+  <div id="body"><p class="empty">Loading&hellip;</p></div>
+</main>
+
+<script type="module">
+import { mountHeader, api, esc, money } from '/common.js';
+
+mountHeader('/dashboard.html');
+const body = document.getElementById('body');
+
+const ROLE_LABEL = { JE: 'Junior Engineer', AE: 'Assistant Engineer / SDO', FIN: 'Finance / Accounts', EE: 'Executive Engineer' };
+
+function tiles(d) {
+  return `<div class="tiles">
+    <div class="tile"><div class="k">Live files</div><div class="v">${d.live}</div></div>
+    <div class="tile ${d.overdue ? 'alarm' : ''}"><div class="k">Past ${d.sla_days}-day SLA</div><div class="v">${d.overdue}</div></div>
+    <div class="tile"><div class="k">Completed</div><div class="v">${d.completed}</div></div>
+    <div class="tile"><div class="k">Total</div><div class="v">${d.total}</div></div>
+  </div>`;
+}
+
+function byRole(d) {
+  if (!d.by_role.length) return '';
+  const worst = Math.max(1, ...d.by_role.map(r => r.worst));
+  return `
+    <h2>Where files are waiting</h2>
+    <div class="card" style="padding:0;overflow-x:auto">
+      <table>
+        <thead><tr><th>Holding</th><th>Files</th><th>Past SLA</th><th>Avg wait</th><th>Longest</th><th style="width:34%">&nbsp;</th></tr></thead>
+        <tbody>${d.by_role.map(r => `
+          <tr>
+            <td><span class="pill">${esc(r.role)}</span>
+              <div class="muted" style="font-size:12px">${esc(ROLE_LABEL[r.role] ?? '')}</div></td>
+            <td>${r.files}</td>
+            <td>${r.overdue ? `<span class="pill danger">${r.overdue}</span>` : '<span class="muted">0</span>'}</td>
+            <td>${r.avg_days} d</td>
+            <td>${r.worst} d</td>
+            <td><div class="bar"><span class="${r.worst > d.sla_days ? 'over' : ''}" style="width:${Math.round(r.worst / worst * 100)}%"></span></div></td>
+          </tr>`).join('')}</tbody>
+      </table>
+    </div>
+    <p class="muted" style="font-size:13px;margin-top:-4px">
+      Waiting time is attributed to the role currently holding the file — which is how you find
+      out where files actually die, rather than which department is blamed for it.
+    </p>`;
+}
+
+function projects(d) {
+  if (!d.projects.length) {
+    return `<div class="card"><p class="empty" style="padding:8px">No projects yet. Run <code>npm run seed</code>.</p></div>`;
+  }
+  return `
+    <h2>All files</h2>
+    <div class="card" style="padding:0;overflow-x:auto">
+      <table>
+        <thead><tr><th>Code</th><th>Project</th><th>Budget</th><th>Stage</th><th>Waiting on</th><th>Days</th></tr></thead>
+        <tbody>${d.projects.map(p => `
+          <tr class="clickable ${p.overdue ? 'broken' : ''}" data-id="${p.id}">
+            <td class="mono">${esc(p.code)}</td>
+            <td><a class="plain" href="/project.html?id=${p.id}">${esc(p.title)}</a>
+              <div class="muted" style="font-size:12px">${esc(p.department)}</div></td>
+            <td>${money(p.budget)}</td>
+            <td><span class="pill ${p.current_stage === 'PAYMENT_TRIGGERED' ? 'ok' : ''}">${esc(p.stage_label)}</span></td>
+            <td>${p.waiting_on ? `<span class="pill muted">${esc(p.waiting_on)}</span>` : '<span class="muted">—</span>'}</td>
+            <td>${p.overdue ? `<span class="pill danger">${p.days_in_stage} d</span>` : `${p.days_in_stage} d`}</td>
+          </tr>`).join('')}</tbody>
+      </table>
+    </div>`;
+}
+
+api('/api/delays').then(d => {
+  body.innerHTML = tiles(d) + byRole(d) + projects(d);
+  body.querySelectorAll('tr.clickable').forEach(tr => {
+    tr.addEventListener('click', e => {
+      if (e.target.closest('a')) return;
+      location.href = `/project.html?id=${tr.dataset.id}`;
+    });
+  });
+}).catch(err => { body.innerHTML = `<p class="empty">${esc(err.message)}</p>`; });
+</script>
+</body>
+</html>

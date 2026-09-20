@@ -55,9 +55,10 @@ export const STATUS_TONE = {
 };
 
 // --- header ------------------------------------------------------------------------------------
-// Ledger viewer and delay dashboard land in Phase 4.
 const NAV = [
   ['/', 'Projects'],
+  ['/ledger.html', 'Ledger'],
+  ['/dashboard.html', 'Delay dashboard'],
 ];
 
 /** Render the shared top bar, including the role switcher. Reloads the page on role change. */

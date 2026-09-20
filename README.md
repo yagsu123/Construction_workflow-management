@@ -77,8 +77,13 @@ Phases 0–2 of 6 complete.
   rejections looping back to the JE and recorded on the ledger
 - **Phase 3** — geo-tagged e-MB capture: photo + GPS fix + note, with the photo's own
   SHA-256 inside the ledger payload, so swapping the image file is detectable too
+- **Phase 4** — ledger viewer with a live integrity verdict, and a delay dashboard that
+  attributes waiting time to the role holding each file
 
-Next: the ledger viewer and delay dashboard (Phase 4), seed data (Phase 5), demo rehearsal (Phase 6).
+Testing: `npm test` (34 unit), `npm run stress` (41 adversarial checks against a live server),
+`npm run verify` (ledger integrity). See [`TESTING.md`](./TESTING.md).
+
+Next: seed data (Phase 5), demo rehearsal (Phase 6).
 
 The full phase plan, including the Indian-context revision that introduced the AE gate, is in
 [`docs/build-plan.md`](./docs/build-plan.md).
