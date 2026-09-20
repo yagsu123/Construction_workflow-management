@@ -127,10 +127,11 @@ Exits 1 when broken, so you can run it on a schedule and get paged.
 This is the demo, and it is worth doing by hand once so you understand it.
 
 ```bash
-sqlite3 ~/.pwd-infra-workflow/app.db \
-  "UPDATE approvals SET comment = 'budget verified: Rs 10,00,000' WHERE seq = 2;"
-npm run verify
+npm run tamper edit        # then: npm run tamper restore
 ```
+
+It edits the database directly and prints the chain state before and after. Three attacks are
+available — `edit`, `resign`, `photo` — and `npm run tamper` on its own lists them.
 
 ```
   2  FAIL  APPROVAL    project 1   VERIFIED by FIN
@@ -155,7 +156,7 @@ the database. Re-signing the chain changes the tip, and the tip no longer matche
 published at that length.
 
 ```bash
-npm run verify
+npm run tamper resign
 ```
 
 ```

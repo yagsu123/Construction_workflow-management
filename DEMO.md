@@ -118,48 +118,110 @@ on `localhost` or HTTPS — browsers block geolocation otherwise.)*
 Open **Ledger**. Green banner: *Chain valid — all 23 entries recompute, and 23 published tips
 agree.* Every row shows `prev_hash → hash`.
 
-Now, in window 2:
+Now, in your second window:
 
 ```powershell
-node -e "const{DatabaseSync}=require('node:sqlite');const os=require('os'),p=require('path');const d=new DatabaseSync(p.join(os.homedir(),'.pwd-infra-workflow','app.db'));d.prepare(`UPDATE approvals SET comment='Budget head BE-2026-41 confirmed, Rs 2,45,00,000' WHERE seq=(SELECT MAX(seq) FROM approvals WHERE status='VERIFIED')`).run();console.log('tampered');"
+npm run tamper edit
 ```
 
-Refresh the Ledger page. Red banner:
+It prints before, the edit it made, and after:
 
-> **Chain broken** — first break at seq N. Every record from there on is no longer trustworthy.
+```
+  before
+    chain   valid     23 entries, tip 46d7b19bbf…78275f
+  Editing approval seq 17 directly in SQLite
+    was: Budget head BE-2026-41 confirmed, within sanctioned estimate
+    now: Budget head BE-2026-41 confirmed — revised to Rs 2,45,00,000
+  after
+    chain   BROKEN at seq 17
+  Caught. Entry 17 no longer hashes to its stored value.
+```
 
-**Say this:** *"One row edited directly in the database. Nobody touched the application. The
-ledger caught it and named the exact record."*
+Refresh the Ledger page — red banner, and row 17 tinted with `ALTERED_PAYLOAD`.
 
-### 6. The question you'll be asked (30 sec)
+**Say this:** *"One row changed in the database. Nobody touched the application, nobody logged
+in. The ledger caught it and named the exact record."*
+
+### 6. The question you will be asked (45 sec)
 
 Someone sharp will say: *"If I can edit the database, can't I just recompute all the hashes?"*
 
-**Yes.** And you should say so — then show that you handled it:
+**Yes.** Say so — then show them you handled it.
 
 ```powershell
-npm run verify
+npm run tamper restore
+npm run tamper resign
 ```
 
-If the chain has been re-signed, you get:
+```
+  after
+    chain   valid     23 entries, tip 4ad4bd4178…71e821
+    anchors MISMATCH  23 published
 
-> **ANCHOR MISMATCH** — the chain is internally consistent but does not match what was
-> published. Somebody rewrote history and re-signed it.
+  The chain says VALID — and it is right. Every hash recomputes.
+  Caught by the anchors.
+    at length 17:  published bcade623f8…771a70
+                    chain now 3a47f5cf63…59e583
+```
 
-**Say this:** *"A hash chain proves internal consistency, not history. So we publish the tip
-outside the database after every entry. In production that's a public blockchain; here it's an
-append-only file. Rewriting history changes the tip, and the tip no longer matches what was
-published."*
+**Say this:** *"A hash chain proves internal consistency, not history. So after every entry we
+publish the tip somewhere the database can't reach. Rewriting history changes the tip, and the
+tip no longer matches what was published. In production that's a public blockchain — here it's
+an append-only file. Same argument."*
 
-That answer is worth more than the demo itself — it shows you know where your own design ends.
+That answer is worth more than the demo itself: it shows you know where your own design ends.
+
+### 7. Optional third beat — the swapped photo (30 sec)
+
+Only if you have time, or if someone asks about the photos.
+
+```powershell
+npm run tamper restore
+npm run tamper photo
+```
+
+```
+  chain still valid — correct, because the record was not altered.
+  photo       MISMATCH
+```
+
+Refresh the Ledger — that e-MB row carries a **photo swapped** flag.
+
+**Say this:** *"The record is untouched, so the chain is right to say it's valid. But the photo
+it points at isn't the photo that was signed — the image's own hash is inside the entry."*
 
 ### Resetting between runs
 
 ```powershell
-npm run seed
+npm run tamper restore
 ```
 
-Wipes everything and rebuilds it, anchors included.
+Reseeds everything, anchors included. Run it after every attack.
+
+---
+
+## The 60-second rehearsal
+
+Practise these six moves until you don't need the notes. Two windows: browser, and PowerShell.
+
+| | Do | Say | ~ |
+|---|---|---|---|
+| 1 | Ledger page, point at the green banner | "Every approval and every site measurement, one chain, all verified." | 8 s |
+| 2 | `npm run tamper edit` | "I'm editing the database directly — no login, no API." | 10 s |
+| 3 | Point at `BROKEN at seq 17` | "Caught, and it names the record." | 7 s |
+| 4 | Refresh the Ledger, point at the red row | "And the page says so to anyone who looks." | 8 s |
+| 5 | *"Can't you just recompute the hashes?"* — `npm run tamper resign` | "Yes, you can. So we publish the tip outside the database." | 15 s |
+| 6 | Point at `anchors MISMATCH` | "Chain says valid. The published tip says otherwise." | 10 s |
+
+**Rehearsal notes**
+
+- Run `npm run tamper restore` **before you go on stage**, and again between practice runs.
+  A stale broken chain makes step 1 start red.
+- Have the Ledger page already open and scrolled to the top.
+- `npm run tamper edit` prints before *and* after itself, so you never need to run `verify`
+  separately during the demo.
+- Do not skip step 5 even if nobody asks. Ask it yourself: *"Now, the obvious objection is…"*.
+  Pre-empting your own weakness reads as confidence; being caught by it does not.
 
 ---
 

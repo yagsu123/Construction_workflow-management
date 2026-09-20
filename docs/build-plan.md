@@ -87,9 +87,9 @@ ledger.
 
 ## Phase 4 — Ledger viewer & delay dashboard (45 min)
 
-- [ ] Raw ledger table: every entry with its hash + prev_hash, for the tamper-evidence demo
-- [ ] Delay dashboard: all projects with "days in current stage" and a red flag past a hardcoded SLA (e.g. 7 days)
-- [ ] Per-stage delay attribution — which *role* the file is stuck with, so the AE and Finance gates can be compared
+- [x] Raw ledger table: every entry with its hash + prev_hash, for the tamper-evidence demo
+- [x] Delay dashboard: all projects with "days in current stage" and a red flag past a hardcoded SLA (e.g. 7 days)
+- [x] Per-stage delay attribution — which *role* the file is stuck with, so the AE and Finance gates can be compared
 
 **Deliverable:** the two most persuasive demo screens — chain integrity + public delay flagging.
 
@@ -97,10 +97,10 @@ ledger.
 
 ## Phase 5 — Seed data (20 min)
 
-- [ ] 4–5 realistic fake projects at different stages
-- [ ] At least one deliberately past-SLA project (for the red-flag demo)
-- [ ] At least one project stalled **at the AE test-check** — the most realistic bottleneck
-- [ ] At least one project with a full approval chain ready to click through live
+- [x] 4–5 realistic fake projects at different stages
+- [x] At least one deliberately past-SLA project (for the red-flag demo)
+- [x] At least one project stalled **at the AE test-check** — the most realistic bottleneck
+- [x] At least one project with a full approval chain ready to click through live
 
 **Deliverable:** demo-ready dataset.
 
@@ -108,10 +108,10 @@ ledger.
 
 ## Phase 6 — Rehearse tamper-evidence demo (15–20 min)
 
-- [ ] Edit one approval row directly in the DB (change an amount)
-- [ ] Show the chain-validation check fail because the hash no longer matches `prev_hash`
-- [ ] Second beat: swap a site photo on disk and show the photo hash check fail while the row itself is untouched
-- [ ] Practice this as a single 60-second beat — it's the core "why blockchain" argument
+- [x] Edit one approval row directly in the DB (change an amount)
+- [x] Show the chain-validation check fail because the hash no longer matches `prev_hash`
+- [x] Second beat: swap a site photo on disk and show the photo hash check fail while the row itself is untouched
+- [x] Practice this as a single 60-second beat — it's the core "why blockchain" argument
 
 **Deliverable:** rehearsed demo narrative.
 

@@ -28,7 +28,7 @@ Then open <http://localhost:3000>.
 | `npm start` | Run the app on port 3000 (`PORT=4000 npm start` to change) |
 | `npm run seed` | Load the demo dataset *(Phase 5)* |
 | `npm run verify` | Re-validate the whole ledger chain *(Phase 1)* |
-| `npm run tamper` | Edit a row behind the ledger's back, to break the chain on purpose *(Phase 6)* |
+| `npm run tamper` | Three attacks on the ledger — `edit`, `resign`, `photo`, plus `restore` |
 | `npm test` | Ledger unit tests *(Phase 1)* |
 
 ## How it works
@@ -87,6 +87,8 @@ Phases 0–2 of 6 complete.
 - **Authentication** — the role dropdown was replaced with scrypt-hashed sign-in and
   `HttpOnly` session cookies; the server derives the role from the session and ignores any
   `role` sent by the client
+- **Phase 6** — the tamper demo as three scripted attacks, each printing the chain state
+  before and after, with a timed six-move rehearsal in [`DEMO.md`](./DEMO.md)
 
 Testing: `npm test` (45 unit), `npm run stress` (54 adversarial checks — it starts its own
 server if none is running), `npm run verify` (ledger integrity). See [`TESTING.md`](./TESTING.md).
@@ -94,7 +96,7 @@ server if none is running), `npm run verify` (ledger integrity). See [`TESTING.m
 Demo logins are listed on the sign-in page. Password for all of them: `demo1234`.
 Running the demo, screen by screen: [`DEMO.md`](./DEMO.md).
 
-Next: demo rehearsal (Phase 6).
+**All six phases complete.**
 
 The full phase plan, including the Indian-context revision that introduced the AE gate, is in
 [`docs/build-plan.md`](./docs/build-plan.md).

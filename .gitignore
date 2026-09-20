@@ -1,9 +1,11 @@
 node_modules/
 .next/
 out/
-data/*.db
-data/*.db-journal
+# The live database lives in ~/.pwd-infra-workflow (see src/config.js). These are stale files
+# from an earlier phase that OneDrive holds a lock on and will not let us delete.
+data/
 public/uploads/*
 !public/uploads/.gitkeep
 .env*.local
 .DS_Store
+.commit-msg.txt
