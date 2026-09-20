@@ -9,3 +9,4 @@ public/uploads/*
 .env*.local
 .DS_Store
 .commit-msg.txt
+.commit-msg2.txt

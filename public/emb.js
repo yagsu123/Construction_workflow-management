@@ -1,28 +1,24 @@
-// e-MB capture: downscale the photo in the browser, read GPS, post JSON.
-// Downscaling client-side keeps the server dependency-free (no multipart parser)
-// and keeps a 6 MB phone photo from becoming a 6 MB request.
+// e-MB capture: read the photo's ORIGINAL bytes, read GPS, post JSON.
+//
+// This used to re-encode the photo through a <canvas> to shrink it. That also stripped the
+// EXIF block — which is exactly the evidence that proves where and when the photo was taken.
+// A smaller upload was not worth surrendering the only thing that makes "geo-tagged" mean
+// anything, so the original bytes now go up untouched.
 
-const MAX_EDGE = 1280;
-const QUALITY = 0.8;
+const MAX_BYTES = 12 * 1024 * 1024;
 
-export function compressToDataUrl(file) {
+/** The file's own bytes as a data URL — no re-encoding, so EXIF survives. */
+export function readFileAsDataUrl(file) {
   return new Promise((resolve, reject) => {
     if (!file) return reject(new Error('Choose a site photo first'));
     if (!file.type.startsWith('image/')) return reject(new Error('That file is not an image'));
-
-    const img = new Image();
-    const url = URL.createObjectURL(file);
-    img.onload = () => {
-      URL.revokeObjectURL(url);
-      const scale = Math.min(1, MAX_EDGE / Math.max(img.width, img.height));
-      const canvas = document.createElement('canvas');
-      canvas.width = Math.round(img.width * scale);
-      canvas.height = Math.round(img.height * scale);
-      canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
-      resolve(canvas.toDataURL('image/jpeg', QUALITY));
-    };
-    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Could not read that image')); };
-    img.src = url;
+    if (file.size > MAX_BYTES) {
+      return reject(new Error(`That photo is ${(file.size / 1048576).toFixed(1)} MB; the limit is 12 MB`));
+    }
+    const fr = new FileReader();
+    fr.onload = () => resolve(fr.result);
+    fr.onerror = () => reject(new Error('Could not read that image'));
+    fr.readAsDataURL(file);
   });
 }
 

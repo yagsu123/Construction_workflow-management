@@ -11,6 +11,7 @@
 // Anything that gets through is a real finding, not a style nit.
 
 import { spawn } from 'node:child_process';
+import { makeJpegWithExif, makeJpegWithoutExif } from '../tests/fixtures/jpeg.js';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
@@ -48,7 +49,7 @@ async function req(method, path, body, { noCookie = false } = {}) {
 }
 
 const PASSWORD = process.env.DEMO_PASSWORD || 'demo1234';
-const LOGIN = { JE: 'je.patel', AE: 'ae.shah', FIN: 'fin.desai', EE: 'ee.mehta' };
+const LOGIN = { JE: 'je.patel', AE: 'ae.shah', DEE: 'dee.desai', EE: 'ee.mehta' };
 
 /** Sign in as a role. Everything after this call acts as that person. */
 async function as(role) {
@@ -69,13 +70,21 @@ const doAction = async (id, role, action, comment = '') => {
 };
 
 const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+
+const jpegDataUrl = buf => `data:image/jpeg;base64,${buf.toString('base64')}`;
+const nowStamp = (offsetMs = 0) => {
+  const t = new Date(Date.now() + offsetMs), p = n => String(n).padStart(2, '0');
+  return `${t.getUTCFullYear()}:${p(t.getUTCMonth() + 1)}:${p(t.getUTCDate())} ` +
+         `${p(t.getUTCHours())}:${p(t.getUTCMinutes())}:${p(t.getUTCSeconds())}`;
+};
+const photoAt = (lat, lng, stamp = nowStamp()) => jpegDataUrl(makeJpegWithExif({ lat, lng, takenAt: stamp }));
 const measure = async (id, role, over = {}) => {
   await as(role);
   return req('POST', `/api/projects/${id}/measurement`, { photo: PNG, lat: 23.0225, lng: 72.5714, note: '', ...over });
 };
 
-const ROLES = ['JE', 'AE', 'FIN', 'EE'];
-const ALL_ACTIONS = ['submit', 'test_check', 'verify', 'approve', 'reject', 'trigger_payment'];
+const ROLES = ['JE', 'AE', 'DEE', 'EE'];
+const ALL_ACTIONS = ['submit', 'test_check', 'tech_approve', 'approve', 'reject', 'trigger_payment'];
 
 // ---------------------------------------------------------------------------------------------
 
@@ -137,8 +146,8 @@ async function main() {
   section('0b. Role separation — each action belongs to exactly one account');
   {
     const p = await newProject();
-    const wrongCreator = await (async () => { await as('FIN'); return req('POST', '/api/projects', { title: 'X', budget: 1, department: 'PWD' }); })();
-    check('Finance cannot create a DPR', wrongCreator.status === 403, `got ${wrongCreator.status}`);
+    const wrongCreator = await (async () => { await as('DEE'); return req('POST', '/api/projects', { title: 'X', budget: 1, department: 'PWD' }); })();
+    check('DEE cannot create a DPR', wrongCreator.status === 403, `got ${wrongCreator.status}`);
     check('project was still created by the JE earlier', !!p?.id);
   }
 
@@ -149,11 +158,11 @@ async function main() {
     const legal = {
       DRAFT: 'JE:submit',
       PENDING_AE: 'AE:test_check',
-      PENDING_FINANCE: 'FIN:verify',
+      PENDING_DEE: 'DEE:tech_approve',
       PENDING_EE: 'EE:approve',
       APPROVED: 'EE:trigger_payment',
     };
-    const walk = ['DRAFT', 'PENDING_AE', 'PENDING_FINANCE', 'PENDING_EE', 'APPROVED'];
+    const walk = ['DRAFT', 'PENDING_AE', 'PENDING_DEE', 'PENDING_EE', 'APPROVED'];
     let leaks = 0, checked = 0;
 
     for (const stage of walk) {
@@ -182,9 +191,9 @@ async function main() {
   {
     const p = await newProject();
     await doAction(p.id, 'JE', 'submit');
-    const fin = await doAction(p.id, 'FIN', 'verify');
+    const fin = await doAction(p.id, 'DEE', 'tech_approve');
     const ee = await doAction(p.id, 'EE', 'approve');
-    check('Finance refused at PENDING_AE', fin.status === 400 && /with AE/.test(fin.data?.error ?? ''), JSON.stringify(fin.data));
+    check('DEE refused at PENDING_AE', fin.status === 400 && /with AE/.test(fin.data?.error ?? ''), JSON.stringify(fin.data));
     check('EE refused at PENDING_AE', ee.status === 400 && /with AE/.test(ee.data?.error ?? ''), JSON.stringify(ee.data));
 
     const after = (await req('GET', `/api/projects/${p.id}`)).data.project;
@@ -206,7 +215,7 @@ async function main() {
     check('re-submitting an already-submitted file is refused', replay.status === 400, JSON.stringify(replay.data));
 
     await doAction(p.id, 'AE', 'test_check');
-    await doAction(p.id, 'FIN', 'verify');
+    await doAction(p.id, 'DEE', 'tech_approve');
     await doAction(p.id, 'EE', 'approve');
     await doAction(p.id, 'EE', 'trigger_payment');
     const again = await doAction(p.id, 'EE', 'trigger_payment');
@@ -328,7 +337,7 @@ async function main() {
     }
     check(`${bad.length} malformed e-MB submissions all refused`, refused === bad.length, `${refused}/${bad.length}`);
 
-    for (const role of ['AE', 'FIN', 'EE']) {
+    for (const role of ['AE', 'DEE', 'EE']) {
       const r = await measure(p.id, role);
       check(`${role} cannot record a site measurement`, r.status === 400 && /Only the JE/.test(r.data?.error ?? ''));
     }
@@ -341,9 +350,15 @@ async function main() {
   section('9. Oversized payloads');
   {
     const p = await newProject();
-    const big = 'A'.repeat(6 * 1024 * 1024);
-    const r = await measure(p.id, 'JE', { photo: `data:image/png;base64,${big}` });
-    check('oversized photo refused, server survives', r.status === 400 || r.status === 413, `got ${r.status}`);
+    // Over the photo cap (12 MB) but under the request cap, so the photo rule is what fires.
+    const overPhotoCap = 'A'.repeat(Math.ceil(12.5 * 1024 * 1024 * 4 / 3));
+    const r = await measure(p.id, 'JE', { photo: `data:image/jpeg;base64,${overPhotoCap}` });
+    check('a photo over the 12 MB limit is refused', r.status === 400, `got ${r.status}`);
+
+    // Over the request cap, so the body reader is what fires.
+    const overRequestCap = 'A'.repeat(18 * 1024 * 1024);
+    const r2 = await measure(p.id, 'JE', { photo: `data:image/jpeg;base64,${overRequestCap}` });
+    check('an oversized request body is refused', r2.status === 400 || r2.status === 413, `got ${r2.status}`);
 
     const alive = await req('GET', '/api/health');
     check('server still healthy after the big payload', alive.status === 200);
@@ -392,6 +407,112 @@ async function main() {
       `${l.anchors?.checked} anchors vs ${l.length} entries`);
     check('/api/ledger reports overall validity as chain AND anchors',
       l.valid === (l.chain_valid && l.anchors.valid));
+  }
+
+  // === 13. Geofencing and photo provenance =====================================================
+  section('13. Geofencing — an e-MB entry must be filed from the site');
+  {
+    const SITE = { lat: 23.0225, lng: 72.5714 };
+    const NEARBY = { lat: 23.0234, lng: 72.5714 };          // ~100 m
+    const FAR = { lat: 23.2156, lng: 72.6341 };             // ~22 km
+
+    await as('JE');
+    const p = (await req('POST', '/api/projects', {
+      title: 'Geofenced package', budget: 5000000, department: 'PWD (Roads)',
+      site_lat: SITE.lat, site_lng: SITE.lng, site_radius_m: 250,
+    })).data.project;
+    check('a project can register a geofenced site', !!p?.id);
+
+    const onSite = await req('POST', `/api/projects/${p.id}/measurement`,
+      { photo: photoAt(NEARBY.lat, NEARBY.lng), lat: NEARBY.lat, lng: NEARBY.lng, note: 'on site' });
+    check('an entry filed on site is accepted', onSite.status === 201, JSON.stringify(onSite.data).slice(0, 160));
+    check('the photo GPS is confirmed', onSite.data?.verification?.verdict === 'EXIF_CONFIRMED',
+      onSite.data?.verification?.verdict);
+    check('the distance from site is recorded', typeof onSite.data?.distance_m === 'number',
+      `${onSite.data?.distance_m}`);
+
+    const offSite = await req('POST', `/api/projects/${p.id}/measurement`,
+      { photo: photoAt(FAR.lat, FAR.lng), lat: FAR.lat, lng: FAR.lng, note: 'from the office' });
+    check('THE FRAUD: an entry filed 22 km away is refused', offSite.status === 400,
+      `got ${offSite.status}`);
+    check('the refusal names the distance', /km/.test(offSite.data?.error ?? ''), offSite.data?.error);
+
+    // Standing on site, uploading a photo taken elsewhere.
+    const borrowed = await req('POST', `/api/projects/${p.id}/measurement`,
+      { photo: photoAt(FAR.lat, FAR.lng), lat: NEARBY.lat, lng: NEARBY.lng, note: 'borrowed photo' });
+    check('a photo whose own GPS contradicts the claim is refused', borrowed.status === 400,
+      `got ${borrowed.status}`);
+
+    const stale = await req('POST', `/api/projects/${p.id}/measurement`,
+      { photo: photoAt(NEARBY.lat, NEARBY.lng, nowStamp(-40 * 86400000)), lat: NEARBY.lat, lng: NEARBY.lng });
+    check('a photo taken 40 days ago is refused', stale.status === 400, `got ${stale.status}`);
+
+    const future = await req('POST', `/api/projects/${p.id}/measurement`,
+      { photo: photoAt(NEARBY.lat, NEARBY.lng, nowStamp(10 * 86400000)), lat: NEARBY.lat, lng: NEARBY.lng });
+    check('a photo dated in the future is refused', future.status === 400, `got ${future.status}`);
+
+    const stripped = await req('POST', `/api/projects/${p.id}/measurement`,
+      { photo: jpegDataUrl(makeJpegWithoutExif()), lat: NEARBY.lat, lng: NEARBY.lng, note: 'no exif' });
+    check('a photo with no EXIF is accepted under the default policy', stripped.status === 201,
+      `got ${stripped.status}`);
+    check('...but permanently marked UNVERIFIED', stripped.data?.verification?.verdict === 'UNVERIFIED',
+      stripped.data?.verification?.verdict);
+
+    const l = (await req('GET', '/api/ledger')).data;
+    const mine = l.entries.filter(e => e.project_id === p.id);
+    check('only the legitimate entries reached the ledger', mine.length === 2, `${mine.length} entries`);
+    check('the chain is still valid', l.valid === true);
+  }
+
+  // === 14. Ground delay ========================================================================
+  section('14. Ground delay — why the work stopped, and who answers for it');
+  {
+    const p = await newProject();
+
+    await as('DEE');
+    const wrongRole = await req('POST', `/api/projects/${p.id}/delays`, { reason_code: 'WEATHER' });
+    check('DEE cannot report a site delay', wrongRole.status === 400, `got ${wrongRole.status}`);
+
+    await as('JE');
+    const bogus = await req('POST', `/api/projects/${p.id}/delays`, { reason_code: 'BECAUSE_REASONS' });
+    check('an unknown delay reason is refused', bogus.status === 400);
+
+    const other = await req('POST', `/api/projects/${p.id}/delays`, { reason_code: 'OTHER', remarks: '' });
+    check('"other" without an explanation is refused', other.status === 400);
+
+    const raised = await req('POST', `/api/projects/${p.id}/delays`,
+      { reason_code: 'LAND_ACQUISITION', remarks: '3 plots disputed' });
+    check('a hold is recorded on the ledger', raised.status === 201 && raised.data.entry?.seq > 0);
+    check('it is attributed to the right party', raised.data?.reason?.party === 'EXTERNAL',
+      raised.data?.reason?.party);
+
+    const dup = await req('POST', `/api/projects/${p.id}/delays`, { reason_code: 'LAND_ACQUISITION' });
+    check('the same hold cannot be raised twice', dup.status === 400);
+
+    const detail = (await req('GET', `/api/projects/${p.id}`)).data.project;
+    check('the project reports itself as held', detail.on_hold === true);
+    check('the hold is not counted as an unexplained SLA breach', detail.overdue === false);
+
+    const closed = await req('POST', `/api/projects/${p.id}/delays/resolve`,
+      { reason_code: 'LAND_ACQUISITION', remarks: 'Award declared' });
+    check('a hold can be closed', closed.status === 200, JSON.stringify(closed.data).slice(0, 120));
+
+    const after = (await req('GET', `/api/projects/${p.id}/delays`)).data;
+    check('closing appends rather than edits — both entries survive', after.delays.length === 2,
+      `${after.delays.length} rows`);
+    check('the closed hold stops accruing', after.summary.open_count === 0);
+
+    const l = (await req('GET', '/api/ledger')).data;
+    check('the chain is still valid with DELAY entries interleaved', l.valid === true,
+      l.valid ? '' : `break at ${l.first_break}`);
+    check('delay entries appear on the unified chain',
+      l.entries.some(e => e.entry_type === 'DELAY'));
+
+    const agg = (await req('GET', '/api/delays')).data;
+    check('the dashboard separates ground delay from file delay',
+      typeof agg.ground?.total_days === 'number' && Array.isArray(agg.delay_by_reason));
+    check('contractor days are reported separately from excusable days',
+      typeof agg.ground.contractor_days === 'number' && typeof agg.ground.excusable_days === 'number');
   }
 
   // === summary =================================================================================

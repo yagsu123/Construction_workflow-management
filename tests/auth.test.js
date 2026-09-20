@@ -20,8 +20,8 @@ test('correct credentials return the account, wrong ones return null', () => {
 });
 
 test('every demo role has exactly one account', () => {
-  assert.deepEqual(DEMO_ACCOUNTS.map(a => a.role).sort(), ['AE', 'EE', 'FIN', 'JE']);
-  assert.equal(new Set(DEMO_ACCOUNTS.map(a => a.username)).size, 4);
+  assert.deepEqual(DEMO_ACCOUNTS.map(a => a.role).sort(), ['AE', 'CONTRACTOR', 'DEE', 'EE', 'JE']);
+  assert.equal(new Set(DEMO_ACCOUNTS.map(a => a.username)).size, 5);
 });
 
 test('no account object ever carries a password or a hash', () => {

@@ -63,7 +63,7 @@ test('photoStillMatches detects a swapped image file on disk', () => {
 
 test('a measurement chains onto the same ledger as approvals', () => {
   const db = freshDb();
-  act(db, { projectId: 1, role: 'JE', action: 'submit' });
+  act(db, { projectId: 1, role: 'CONTRACTOR', action: 'submit_ra' });
   const { entry } = recordMeasurement(db, mb());
   assert.equal(entry.seq, 2);
   assert.equal(verifyChain(db).valid, true);
@@ -71,7 +71,7 @@ test('a measurement chains onto the same ledger as approvals', () => {
 
 test('only the JE may record a measurement', () => {
   const db = freshDb();
-  for (const role of ['AE', 'FIN', 'EE']) {
+  for (const role of ['CONTRACTOR', 'AE', 'DEE', 'EE']) {
     assert.throws(() => recordMeasurement(db, mb({ role })), /Only the JE/);
   }
 });
@@ -91,10 +91,11 @@ test('a photo is required', () => {
 
 test('the measurement book closes once payment is triggered', () => {
   const db = freshDb();
+  act(db, { projectId: 1, role: 'CONTRACTOR', action: 'submit_ra' });
   act(db, { projectId: 1, role: 'JE', action: 'submit' });
   act(db, { projectId: 1, role: 'AE', action: 'test_check' });
-  act(db, { projectId: 1, role: 'FIN', action: 'verify' });
-  act(db, { projectId: 1, role: 'EE', action: 'approve' });
+  act(db, { projectId: 1, role: 'DEE', action: 'tech_approve' });
+  act(db, { projectId: 1, role: 'EE', action: 'approve', dsc_pin: '1234' });
   act(db, { projectId: 1, role: 'EE', action: 'trigger_payment' });
   assert.throws(() => recordMeasurement(db, mb()), /measurement book is closed/);
 });

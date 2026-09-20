@@ -55,7 +55,7 @@ test('approvals and measurements share one chain in seq order', () => {
     project_id: 1, photo_url: '/u/1.jpg', lat: 23.02, lng: 72.57,
     note: 'chainage 0-500', actor_role: 'JE', timestamp: '2026-01-03T00:00:00.000Z',
   });
-  const b = appendLedgerEntry(db, 'APPROVAL', approval({ stage: 'PENDING_FINANCE', actor_role: 'FIN', status: 'VERIFIED' }));
+  const b = appendLedgerEntry(db, 'APPROVAL', approval({ stage: 'PENDING_DEE', actor_role: 'DEE', status: 'TECH_APPROVED' }));
 
   assert.deepEqual([a.seq, m.seq, b.seq], [1, 2, 3]);
   assert.equal(m.prev_hash, a.hash, 'measurement chains onto the approval');

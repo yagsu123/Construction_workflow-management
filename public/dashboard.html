@@ -20,12 +20,13 @@ await requireUser();
 mountHeader('/dashboard.html');
 const body = document.getElementById('body');
 
-const ROLE_LABEL = { JE: 'Junior Engineer', AE: 'Assistant Engineer / SDO', FIN: 'Finance / Accounts', EE: 'Executive Engineer' };
+const ROLE_LABEL = { CONTRACTOR: 'Primary Contractor', JE: 'Junior Engineer', AE: 'Assistant Engineer / SDO', DEE: 'Deputy Executive Engineer', EE: 'Executive Engineer' };
 
 function tiles(d) {
   return `<div class="tiles">
     <div class="tile"><div class="k">Live files</div><div class="v">${d.live}</div></div>
     <div class="tile ${d.overdue ? 'alarm' : ''}"><div class="k">Past ${d.sla_days}-day SLA</div><div class="v">${d.overdue}</div></div>
+    <div class="tile"><div class="k">Held on site</div><div class="v">${d.on_hold}</div></div>
     <div class="tile"><div class="k">Completed</div><div class="v">${d.completed}</div></div>
     <div class="tile"><div class="k">Total</div><div class="v">${d.total}</div></div>
   </div>`;
@@ -57,6 +58,68 @@ function byRole(d) {
     </p>`;
 }
 
+function groundDelay(d) {
+  if (!d.delay_by_reason.length) {
+    return `<h2>Why the work is held up</h2>
+      <div class="card"><p class="muted" style="margin:0">No site delays recorded.</p></div>`;
+  }
+  const worst = Math.max(1, ...d.delay_by_reason.map(r => r.days));
+  const party = Object.fromEntries(d.delay_by_party.map(p => [p.party, p.days]));
+  
+  // Custom SVG Bar Chart for Delay Reasons
+  const maxReasonDays = Math.max(1, ...d.delay_by_reason.map(r => r.days));
+  const chartHeight = Math.max(150, d.delay_by_reason.length * 30 + 40);
+  const chartHtml = `
+    <div style="margin: 20px 0;">
+      <h3 style="margin-bottom: 10px; font-size: 14px;">Delay Impact by Category (Days)</h3>
+      <svg width="100%" height="${chartHeight}" style="background: var(--card); border: 1px solid var(--border); border-radius: 4px;">
+        ${d.delay_by_reason.map((r, i) => {
+          const widthPct = (r.days / maxReasonDays) * 80;
+          const y = i * 30 + 20;
+          const color = r.party === 'CONTRACTOR' ? 'var(--red)' : r.party === 'DEPARTMENT' ? 'var(--orange)' : 'var(--blue)';
+          return `
+            <text x="10" y="${y + 15}" fill="var(--fg)" font-size="12px" font-family="monospace">${esc(r.label).substring(0, 18)}</text>
+            <rect x="150" y="${y}" width="${widthPct}%" height="20" fill="${color}" rx="2"></rect>
+            <text x="calc(150% + ${widthPct}% + 5px)" y="${y + 15}" fill="var(--muted)" font-size="12px">${r.days}</text>
+          `;
+        }).join('')}
+      </svg>
+    </div>
+  `;
+
+  return `
+    <h2>Root-Cause Analytics (Delay & EOT)</h2>
+    <p class="muted" style="font-size:13px;margin:-4px 0 10px">
+      Separate from the table above. That one says which desk the <em>file</em> is on; this says
+      why the <em>work</em> stopped.
+    </p>
+    <div class="tiles">
+      <div class="tile"><div class="k">Days lost on site</div><div class="v">${d.ground.total_days}</div></div>
+      <div class="tile"><div class="k">External / Neutral</div><div class="v">${party.NEUTRAL ?? party.EXTERNAL ?? 0}</div></div>
+      <div class="tile"><div class="k">Department</div><div class="v">${party.DEPARTMENT ?? 0}</div></div>
+      <div class="tile alarm"><div class="k">Contractor</div><div class="v">${party.CONTRACTOR ?? 0}</div></div>
+      <div class="tile"><div class="k">EOT Approved</div><div class="v" style="color:var(--green)">${d.ground.approved_eot_days || 0}</div></div>
+    </div>
+    
+    ${chartHtml}
+
+    <div class="card" style="padding:0;overflow-x:auto">
+      <table>
+        <thead><tr><th>Category</th><th>Answerable</th><th>Excusable</th><th>Files</th><th>Open</th><th>Days</th><th style="width:26%">&nbsp;</th></tr></thead>
+        <tbody>${d.delay_by_reason.map(r => `
+          <tr>
+            <td>${esc(r.label)}</td>
+            <td><span class="pill ${r.party === 'CONTRACTOR' ? 'danger' : r.party === 'DEPARTMENT' ? 'warn' : 'muted'}">${esc(r.party)}</span></td>
+            <td>${r.excusable ? '<span class="muted">grantable</span>' : '<span class="pill danger">no</span>'}</td>
+            <td>${r.projects}</td>
+            <td>${r.open || '<span class="muted">0</span>'}</td>
+            <td>${r.days} d</td>
+            <td><div class="bar"><span class="${r.party === 'CONTRACTOR' ? 'over' : ''}" style="width:${Math.round(r.days / worst * 100)}%"></span></div></td>
+          </tr>`).join('')}</tbody>
+      </table>
+    </div>`;
+}
+
 function projects(d) {
   if (!d.projects.length) {
     return `<div class="card"><p class="empty" style="padding:8px">No projects yet. Run <code>npm run seed</code>.</p></div>`;
@@ -74,14 +137,16 @@ function projects(d) {
             <td>${money(p.budget)}</td>
             <td><span class="pill ${p.current_stage === 'PAYMENT_TRIGGERED' ? 'ok' : ''}">${esc(p.stage_label)}</span></td>
             <td>${p.waiting_on ? `<span class="pill muted">${esc(p.waiting_on)}</span>` : '<span class="muted">—</span>'}</td>
-            <td>${p.overdue ? `<span class="pill danger">${p.days_in_stage} d</span>` : `${p.days_in_stage} d`}</td>
+            <td>${p.overdue ? `<span class="pill danger">${p.days_in_stage} d</span>`
+                  : p.on_hold ? `<span class="pill warn">${p.days_in_stage} d · held</span>`
+                  : `${p.days_in_stage} d`}</td>
           </tr>`).join('')}</tbody>
       </table>
     </div>`;
 }
 
 api('/api/delays').then(d => {
-  body.innerHTML = tiles(d) + byRole(d) + projects(d);
+  body.innerHTML = tiles(d) + byRole(d) + groundDelay(d) + projects(d);
   body.querySelectorAll('tr.clickable').forEach(tr => {
     tr.addEventListener('click', e => {
       if (e.target.closest('a')) return;

@@ -1,8 +1,11 @@
 // Photo storage for e-MB entries.
 //
-// The browser downscales the photo to a JPEG and sends it as a base64 data URL, which keeps
-// this zero-dependency: no multipart parser needed. The file is named after the SHA-256 of its
-// own bytes, so identical photos deduplicate and the filename IS the content fingerprint.
+// The browser sends the photo's ORIGINAL bytes as a base64 data URL. It used to re-encode
+// through a canvas to shrink it, which also stripped EXIF - and EXIF is precisely what proves
+// where and when the photo was taken. Bandwidth was the wrong thing to optimise.
+//
+// The file is named after the SHA-256 of its own bytes, so identical photos deduplicate and the
+// filename IS the content fingerprint.
 
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
@@ -13,7 +16,12 @@ const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 export const UPLOAD_DIR = path.join(ROOT, 'public', 'uploads');
 
 const EXT = { 'image/jpeg': '.jpg', 'image/png': '.png', 'image/webp': '.webp' };
-export const MAX_BYTES = 4 * 1024 * 1024;
+export const MAX_BYTES = Number(process.env.MAX_PHOTO_BYTES || 12 * 1024 * 1024);
+
+// base64 inflates by 4/3 and the JSON envelope adds a little. The request cap has to clear the
+// photo cap with room to spare, or the body reader rejects photos the photo rule would allow
+// and the friendly "too large" message never fires.
+export const MAX_REQUEST_BYTES = Math.ceil(MAX_BYTES * (4 / 3)) + 1024 * 1024;
 
 /**
  * @param {string} dataUrl  e.g. "data:image/jpeg;base64,/9j/4AA..."
@@ -25,7 +33,7 @@ export function saveDataUrl(dataUrl) {
 
   const buf = Buffer.from(m[2], 'base64');
   if (buf.length === 0) throw new Error('Photo is empty');
-  if (buf.length > MAX_BYTES) throw new Error(`Photo is larger than ${MAX_BYTES / 1024 / 1024} MB after compression`);
+  if (buf.length > MAX_BYTES) throw new Error(`Photo is larger than ${Math.round(MAX_BYTES / 1024 / 1024)} MB`);
 
   const sha256 = createHash('sha256').update(buf).digest('hex');
   const filename = sha256 + EXT[m[1]];
@@ -43,7 +51,7 @@ export function saveDataUrl(dataUrl) {
   }
   if (write) fs.writeFileSync(dest, buf);
 
-  return { url: `/uploads/${filename}`, sha256, bytes: buf.length };
+  return { url: `/uploads/${filename}`, sha256, bytes: buf.length, buffer: buf };
 }
 
 /** Re-hash the stored file — proves the image on disk is still the one that was signed. */

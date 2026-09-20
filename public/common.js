@@ -64,12 +64,13 @@ export function ago(iso) {
 }
 
 export const STATUS_TONE = {
-  SUBMITTED: '', TEST_CHECKED: 'ok', VERIFIED: 'ok', APPROVED: 'ok',
+  SUBMITTED: '', TEST_CHECKED: 'ok', TECH_APPROVED: 'ok', APPROVED: 'ok',
   PAYMENT_TRIGGERED: 'ok', REJECTED: 'danger',
 };
 
 // --- header ------------------------------------------------------------------------------------
 const NAV = [
+  ['/tender.html', 'Tenders'],
   ['/', 'Projects'],
   ['/ledger.html', 'Ledger'],
   ['/dashboard.html', 'Delay dashboard'],

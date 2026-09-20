@@ -17,9 +17,10 @@ const DEMO_PASSWORD = process.env.DEMO_PASSWORD || 'demo1234';
 
 /** Fixed departmental accounts. One person per role, which is what a division office looks like. */
 const ACCOUNTS = [
+  { username: 'contractor.ltd', name: 'Contractor', role: 'CONTRACTOR', designation: 'Primary Contractor' },
   { username: 'je.patel',  name: 'R. Patel',  role: 'JE',  designation: 'Junior Engineer, Sub-Division II' },
   { username: 'ae.shah',   name: 'S. Shah',   role: 'AE',  designation: 'Assistant Engineer / SDO, Sub-Division II' },
-  { username: 'fin.desai', name: 'K. Desai',  role: 'FIN', designation: 'Accounts Officer, Division Office' },
+  { username: 'dee.desai', name: 'K. Desai',  role: 'DEE', designation: 'Deputy Executive Engineer, Sub-Division II' },
   { username: 'ee.mehta',  name: 'A. Mehta',  role: 'EE',  designation: 'Executive Engineer, Ahmedabad Division' },
 ];
 

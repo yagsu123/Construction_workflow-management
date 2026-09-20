@@ -6,7 +6,7 @@ import { getDb } from '../src/db.js';
 import { verifyChain } from '../src/ledger.js';
 import { checkAnchors } from '../src/anchor.js';
 
-const R = '\x1b[31m', G = '\x1b[32m', Y = '\x1b[33m', D = '\x1b[2m', X = '\x1b[0m';
+const R = '\x1b[31m', G = '\x1b[32m', Y = '\x1b[33m', D = '\x1b[2m', B = '\x1b[1m', X = '\x1b[0m';
 const short = h => `${h.slice(0, 10)}…${h.slice(-6)}`;
 
 const db = getDb();
@@ -22,8 +22,15 @@ if (result.length === 0) {
 
 for (const e of result.entries) {
   const mark = e.ok ? `${G}ok${X}` : `${R}FAIL${X}`;
-  const kind = e.entry_type === 'APPROVAL' ? `${e.status} by ${e.actor_role}` : `e-MB ${e.lat},${e.lng}`;
-  console.log(`  ${String(e.seq).padStart(3)}  ${mark}  ${e.entry_type.padEnd(11)} project ${String(e.project_id).padEnd(3)} ${kind}`);
+  const kind =
+      e.entry_type === 'APPROVAL'     ? `${e.status} by ${e.actor_role}`
+    : e.entry_type === 'MEASUREMENT'  ? `e-MB ${e.lat},${e.lng}`
+    : e.entry_type === 'TENDER_EVENT' ? `${e.event} by ${e.actor_role}`
+    : e.entry_type === 'DELAY_LOG'    ? `${e.delay_category} (${e.delay_responsibility})`
+    : `${e.status} by ${e.actor_role}`;
+  // A tender event predates the project it will eventually create.
+  const scope = e.entry_type === 'TENDER_EVENT' ? 'tender ' : `project ${String(e.project_id).padEnd(3)}`;
+  console.log(`  ${String(e.seq).padStart(3)}  ${mark}  ${e.entry_type.padEnd(12)} ${scope} ${kind}`);
   console.log(`       ${D}prev ${short(e.prev_hash)}  ->  hash ${short(e.hash)}${X}`);
   if (!e.ok) {
     for (const r of e.reasons) {
@@ -34,6 +41,14 @@ for (const e of result.entries) {
       }
     }
   }
+}
+
+if (result.stale_schema) {
+  console.log(`\n  ${Y}SCHEMA MIGRATED${X} — this ledger predates a change to the hashed payload.`);
+  console.log(`  ${D}written under v${result.schema.version}, code is at v${result.schema.current}${X}`);
+  console.log(`\n  These entries cannot recompute, and that is ${B}not${X} evidence of tampering.`);
+  console.log(`  ${D}Run \`npm run seed\` to rebuild the chain.${X}\n`);
+  process.exit(2);
 }
 
 if (!anchors.valid) {

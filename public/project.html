@@ -14,7 +14,7 @@
 
 <script type="module">
 import { mountHeader, requireUser, api, getRole, esc, money, when, shortHash, toast, STATUS_TONE } from '/common.js';
-import { compressToDataUrl, getPosition, osmLink, coords } from '/emb.js';
+import { readFileAsDataUrl, getPosition, osmLink, coords } from '/emb.js';
 
 await requireUser();
 mountHeader('/');
@@ -46,7 +46,9 @@ function timeline(project) {
     const tone = e.kind === 'APPROVAL' ? (STATUS_TONE[e.status] ?? '') : 'ok';
     const head = e.kind === 'APPROVAL'
       ? `<strong>${esc(e.status.replace(/_/g, ' '))}</strong> by <span class="pill">${esc(e.actor_role)}</span>`
-      : `<strong>e-MB measurement</strong> by <span class="pill">${esc(e.actor_role)}</span>`;
+      : e.kind === 'MEASUREMENT' ? `<strong>e-MB measurement</strong> by <span class="pill">${esc(e.actor_role)}</span>`
+      : e.kind === 'DELAY_LOG' ? `<strong>Delay logged</strong> by <span class="pill">${esc(e.actor_role)}</span>`
+      : `<strong>EOT ${esc(e.status)}</strong> by <span class="pill">${esc(e.actor_role)}</span>`;
     const body = e.kind === 'MEASUREMENT'
       ? `<div class="emb">
            <a href="${esc(e.photo_url)}" target="_blank" rel="noopener">
@@ -55,9 +57,14 @@ function timeline(project) {
            <div>
              <a class="mono" href="${esc(osmLink(e.lat, e.lng))}" target="_blank" rel="noopener">${esc(coords(e.lat, e.lng))}</a>
              ${e.note ? `<div class="comment">${esc(e.note)}</div>` : ''}
+             ${e.photo_verified === 'EXIF_CONFIRMED'
+                 ? `<div style="margin-top:4px"><span class="pill ok">photo GPS confirmed${e.distance_m !== null && e.distance_m !== undefined ? ` · ${e.distance_m} m from site` : ''}</span></div>`
+                 : `<div style="margin-top:4px"><span class="pill warn">no photo GPS — unverified</span></div>`}
              ${e.photo_sha256 ? `<div class="meta mono" style="margin-top:4px">photo ${esc(shortHash(e.photo_sha256))}</div>` : ''}
            </div>
          </div>`
+      : e.kind === 'DELAY_LOG' ? `<div class="comment"><strong>${esc(e.delay_category)}</strong> (${esc(e.delay_responsibility)}) - ${e.impact_days} days<br>${esc(e.comment)}</div>`
+      : e.kind === 'EOT_APPROVAL' ? `<div class="comment">${e.status === 'APPROVED' ? `Approved ${e.approved_days_by_ee} days extension.` : e.status === 'REJECTED' ? `Rejected: ${esc(e.comment)}` : `Requested: ${e.requested_days} days.`}</div>`
       : (e.comment ? `<div class="comment">${esc(e.comment)}</div>` : '');
     return `<li class="${tone}">
       ${head}
@@ -71,21 +78,216 @@ function timeline(project) {
 function actionPanel(project, available) {
   const role = getRole();
   if (project.current_stage === 'PAYMENT_TRIGGERED') {
-    return `<p class="muted">Smart contract executed — the payment trigger is recorded on the ledger. Nothing further to do.</p>`;
+    return `<div class="ok" style="padding: 16px; background: var(--bg); border: 1px solid var(--border); border-radius: 4px; margin-bottom: 16px;">
+      <h3 style="margin-top: 0; color: var(--green);">Smart Contract Executed</h3>
+      <p class="muted">The payment trigger is recorded on the ledger. Deductions and SLA penalties (if any) have been calculated.</p>
+      <ul class="muted" style="margin-bottom: 0;">
+        <li><strong>State Treasury / PFMS:</strong> Payment instruction dispatched for Direct Benefit Transfer.</li>
+        <li><strong>Jan Bhagidari Portal:</strong> Real-time public dashboard updated.</li>
+      </ul>
+    </div>`;
   }
   if (!available.length) {
     return `<p class="muted">You are acting as <span class="pill">${esc(role)}</span>. This file is with
       <span class="pill">${esc(project.waiting_on ?? '—')}</span> — it is not yours to act on.</p>`;
   }
   const needsComment = available.some(a => a.needsComment);
+  const needsPin = role === 'EE' && available.some(a => a.action === 'approve');
   return `
     ${needsComment ? `<div class="field">
       <label for="comment">Reason / remarks</label>
       <input id="comment" placeholder="Required when sending the file back to the JE">
     </div>` : ''}
+    ${needsPin ? `<div class="field">
+      <label for="dsc_pin">DSC PIN</label>
+      <input type="password" id="dsc_pin" placeholder="Enter Simulated DSC PIN (e.g. 1234)">
+    </div>` : ''}
     <div class="actions">
       ${available.map(a => `<button data-action="${esc(a.action)}" class="${esc(a.tone)}">${esc(a.label)}</button>`).join('')}
     </div>`;
+}
+
+function delayCard(project) {
+  const d = project.delays;
+  const open = project.open_delays ?? [];
+  const role = getRole();
+  const canReport = ['JE', 'CONTRACTOR'].includes(role) && project.current_stage !== 'PAYMENT_TRIGGERED';
+
+  let html = '';
+  if (open.length) {
+    html += `<table>
+      <thead><tr><th>Hold</th><th>Answerable</th><th>Est. Days</th><th>Status</th><th></th></tr></thead>
+      <tbody>${open.map(h => {
+        let eotActions = '';
+        if (h.status === 'LOGGED' && canReport) {
+          eotActions = `<form class="eot-request-form" data-id="${h.id}" style="display:flex;gap:4px">
+            <input type="number" name="days" placeholder="Days" required style="width:70px;padding:4px">
+            <button type="submit" style="padding:4px 8px">Request EOT</button>
+          </form>`;
+        } else if (h.status === 'UNDER_REVIEW') {
+          const pendingEot = h.eot_requests?.slice(-1)[0];
+          if (pendingEot) {
+            if (pendingEot.status === 'PENDING_AE' && role === 'AE') {
+              eotActions = `<form class="eot-recommend-form" data-id="${pendingEot.id}" style="display:flex;gap:4px">
+                <input type="number" name="days" value="${pendingEot.requested_days}" required style="width:70px;padding:4px">
+                <button type="submit" style="padding:4px 8px" class="primary">Recommend</button>
+              </form>`;
+            } else if (pendingEot.status === 'PENDING_EE' && role === 'EE') {
+              eotActions = `<form class="eot-approve-form" data-id="${pendingEot.id}" style="display:flex;flex-direction:column;gap:4px">
+                <div style="display:flex;gap:4px">
+                  <input type="number" name="days" value="${pendingEot.recommended_days_by_ae || pendingEot.requested_days}" required style="width:70px;padding:4px">
+                  <button type="submit" name="action" value="APPROVED" style="padding:4px 8px" class="primary">Approve EOT</button>
+                </div>
+                <div style="display:flex;gap:4px">
+                  <input type="text" name="reason" placeholder="Rejection reason" style="width:140px;padding:4px">
+                  <button type="submit" name="action" value="REJECTED" style="padding:4px 8px" class="danger">Reject</button>
+                </div>
+              </form>`;
+            } else {
+              eotActions = `<span class="pill muted">${pendingEot.status}</span>`;
+            }
+          }
+        }
+        return `<tr>
+          <td><strong>${esc(h.delay_category)}</strong><br><span class="muted">${esc(h.description)}</span></td>
+          <td><span class="pill ${h.delay_responsibility === 'CONTRACTOR' ? 'danger' : h.delay_responsibility === 'DEPARTMENT' ? 'warn' : 'muted'}">${esc(h.delay_responsibility)}</span></td>
+          <td>${h.impact_days} d</td>
+          <td>${h.status}</td>
+          <td>${eotActions}</td>
+        </tr>`;
+      }).join('')}</tbody>
+    </table>`;
+  } else {
+    html += `<p class="muted" style="margin:0">No site delay recorded. The work is progressing.</p>`;
+  }
+
+  const totals = d.total_days ? `
+    <p class="muted" style="font-size:13px;margin:10px 0 0">
+      ${d.total_days} day${d.total_days === 1 ? '' : 's'} lost on the ground in total —
+      ${d.excusable_days} excusable,
+      <strong>${d.contractor_days}</strong> attributable to the contractor.
+      ${d.approved_eot_days ? `<br><strong>${d.approved_eot_days} days</strong> of Extension of Time (EOT) granted.` : ''}
+    </p>` : '';
+
+  return `
+    <h2>Site delay & EOT ${open.length ? `<span class="pill danger">${open.length} open</span>` : ''}</h2>
+    <div class="card">
+      ${html}
+      ${totals}
+      ${canReport ? `
+        <form id="delayForm" style="margin-top:16px;border-top:1px solid var(--border);padding-top:14px">
+          <div class="rowsplit">
+            <div class="field">
+              <label for="dcat">Delay Category</label>
+              <select id="dcat" required></select>
+            </div>
+            <div class="field">
+              <label for="dresp">Responsibility</label>
+              <select id="dresp" required>
+                <option value="DEPARTMENT">Department</option>
+                <option value="CONTRACTOR">Contractor</option>
+                <option value="NEUTRAL">Neutral / External</option>
+              </select>
+            </div>
+          </div>
+          <div class="rowsplit">
+            <div class="field">
+              <label for="dimpact">Estimated Impact (Days)</label>
+              <input type="number" id="dimpact" required min="1">
+            </div>
+            <div class="field">
+              <label for="devidence">Evidence Document/Photo (optional)</label>
+              <input type="file" id="devidence" accept="image/*,.pdf">
+            </div>
+          </div>
+          <div class="field">
+            <label for="ddesc">Description</label>
+            <input type="text" id="ddesc" required placeholder="Describe the reason for delay">
+          </div>
+          <div class="actions">
+            <button type="submit">Log Delay</button>
+            <span class="muted">Record a delay on the ledger.</span>
+          </div>
+        </form>` : ''}
+    </div>`;
+}
+
+function wireDelays() {
+  const form = document.getElementById('delayForm');
+  if (form && meta.delay_reasons) {
+    const cats = ['LAND_ACQUISITION', 'UTILITY_SHIFTING', 'FOREST_CLEARANCE', 'DESIGN_REVISION', 'FUND_DELAY', 'MATERIAL_SHORTAGE', 'LABOR_SHORTAGE', 'FORCE_MAJEURE', 'OTHER'];
+    document.getElementById('dcat').innerHTML = cats.map(c => `<option value="${c}">${esc(c.replace(/_/g, ' '))}</option>`).join('');
+
+    form.addEventListener('submit', async e => {
+      e.preventDefault();
+      try {
+        const payload = {
+          delay_category: document.getElementById('dcat').value,
+          delay_responsibility: document.getElementById('dresp').value,
+          impact_days: parseInt(document.getElementById('dimpact').value, 10),
+          description: document.getElementById('ddesc').value,
+        };
+        const fileInput = document.getElementById('devidence');
+        if (fileInput.files.length) {
+          payload.evidence = await readFileAsDataUrl(fileInput.files[0]);
+        }
+        
+        const r = await api(`/api/projects/${id}/delays`, {
+          method: 'POST', body: payload,
+        });
+        toast(`Delay logged at seq ${r.entry.seq}`);
+        render();
+      } catch (err) { toast(err.message, 'danger'); }
+    });
+  }
+
+  document.querySelectorAll('.eot-request-form').forEach(f => {
+    f.addEventListener('submit', async e => {
+      e.preventDefault();
+      f.querySelector('button').disabled = true;
+      try {
+        await api('/api/eot', {
+          method: 'POST',
+          body: { delay_log_id: f.dataset.id, requested_days: parseInt(f.querySelector('input[name="days"]').value, 10) },
+        });
+        toast('EOT Requested'); render();
+      } catch (err) { toast(err.message, 'danger'); f.querySelector('button').disabled = false; }
+    });
+  });
+
+  document.querySelectorAll('.eot-recommend-form').forEach(f => {
+    f.addEventListener('submit', async e => {
+      e.preventDefault();
+      f.querySelector('button').disabled = true;
+      try {
+        await api(`/api/eot/${f.dataset.id}/recommend`, {
+          method: 'POST',
+          body: { recommended_days: parseInt(f.querySelector('input[name="days"]').value, 10) },
+        });
+        toast('EOT Recommended'); render();
+      } catch (err) { toast(err.message, 'danger'); f.querySelector('button').disabled = false; }
+    });
+  });
+
+  document.querySelectorAll('.eot-approve-form').forEach(f => {
+    f.addEventListener('submit', async e => {
+      e.preventDefault();
+      const action = e.submitter.value; // 'APPROVED' or 'REJECTED'
+      const buttons = f.querySelectorAll('button');
+      buttons.forEach(b => b.disabled = true);
+      try {
+        await api(`/api/eot/${f.dataset.id}/approve`, {
+          method: 'POST',
+          body: {
+            status: action,
+            approved_days: parseInt(f.querySelector('input[name="days"]').value, 10),
+            rejection_reason: f.querySelector('input[name="reason"]').value,
+          },
+        });
+        toast(`EOT ${action}`); render();
+      } catch (err) { toast(err.message, 'danger'); buttons.forEach(b => b.disabled = false); }
+    });
+  });
 }
 
 function embCard(project) {
@@ -118,7 +320,7 @@ function embCard(project) {
         </div>
         <div class="actions" style="margin-top:12px">
           <button class="primary" type="submit" id="embSubmit" disabled>Record on ledger</button>
-          <span class="muted">The photo, the coordinates and the timestamp are hashed together.</span>
+          <span class="muted">The photo's own EXIF GPS is checked against this fix, and all of it is hashed together.</span>
         </div>
       </form>
     </div>`;
@@ -152,12 +354,14 @@ function wireEmb() {
     if (!fix) return toast('Get a location fix first', 'danger');
     submit.disabled = true;
     try {
-      const photo = await compressToDataUrl(document.getElementById('photo').files[0]);
+      const photo = await readFileAsDataUrl(document.getElementById('photo').files[0]);
       const r = await api(`/api/projects/${id}/measurement`, {
         method: 'POST',
         body: { photo, lat: fix.lat, lng: fix.lng, note: document.getElementById('note').value },
       });
-      toast(`e-MB recorded on the ledger at seq ${r.entry.seq}`);
+      toast(r.verification.verdict === 'EXIF_CONFIRMED'
+        ? `e-MB recorded at seq ${r.entry.seq} — photo GPS confirmed within ${r.verification.drift_m} m`
+        : `e-MB recorded at seq ${r.entry.seq} — photo carries no GPS, flagged UNVERIFIED`);
       render();
     } catch (err) {
       toast(err.message, 'danger');
@@ -182,7 +386,9 @@ async function render() {
         ${project.waiting_on
           ? `With <span class="pill">${esc(project.waiting_on)}</span> for ${project.days_in_stage} day${project.days_in_stage === 1 ? '' : 's'}`
           : `At ${esc(project.stage_label)}`}
-        ${project.overdue ? ` · <span class="pill danger">past the ${project.sla_days}-day SLA</span>` : ''}
+        ${project.overdue ? ` · <span class="pill danger">past effective ${project.effective_sla_days}-day SLA</span>` : ''}
+        ${project.held_overdue ? ` · <span class="pill warn">past SLA, but held on site</span>` : ''}
+        ${project.ld_amount > 0 ? `<br><span class="danger" style="display:inline-block;margin-top:6px"><strong>Liquidated Damages Triggered:</strong> ${money(project.ld_amount)} penalty (${project.penalty_weeks} week(s) contractor delay)</span>` : ''}
       </p>
     </div>
 
@@ -191,21 +397,25 @@ async function render() {
       <div id="panel">${actionPanel(project, available_actions)}</div>
     </div>
 
+    ${delayCard(project)}
+
     ${embCard(project)}
 
     <h2>Ledger trail for this project</h2>
     <div class="card">${timeline(project)}</div>`;
 
   wireEmb();
+  wireDelays();
 
   view.querySelectorAll('#panel button[data-action]').forEach(btn => {
     btn.addEventListener('click', async () => {
       const comment = view.querySelector('#comment')?.value ?? '';
+      const dsc_pin = view.querySelector('#dsc_pin')?.value ?? '';
       view.querySelectorAll('#panel button').forEach(b => b.disabled = true);
       try {
         const r = await api(`/api/projects/${id}/action`, {
           method: 'POST',
-          body: { action: btn.dataset.action, comment },
+          body: { action: btn.dataset.action, comment, dsc_pin },
         });
         toast(`Recorded on the ledger at seq ${r.entry.seq} — now ${r.moved_to.replace(/_/g, ' ')}`);
         render();

@@ -1,0 +1,308 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tenders — PWD Infrastructure Workflow</title>
+<link rel="stylesheet" href="/app.css">
+</head>
+<body>
+<main>
+  <h1>Tender initiation</h1>
+  <p class="lede">
+    A procurement package is defined, scrutinised, sanctioned and authorised before an Invitation
+    to Tender is published. Bidding and evaluation happen outside this system; the flow resumes
+    at the work order.
+  </p>
+
+  <div class="card" style="padding:0;overflow-x:auto">
+    <table>
+      <thead>
+        <tr><th>NIT</th><th>Work</th><th>Estimate</th><th>Status</th><th>Waiting on</th><th>In status</th></tr>
+      </thead>
+      <tbody id="rows"><tr><td colspan="6" class="empty">Loading&hellip;</td></tr></tbody>
+    </table>
+  </div>
+
+  <div id="detail"></div>
+
+  <h2 id="newHead" hidden>New procurement package</h2>
+  <div class="card" id="newCard" hidden>
+    <form id="pkg">
+      <div class="rowsplit">
+        <div class="field">
+          <label for="title">Name of work</label>
+          <input id="title" name="title" required placeholder="Widening of SH-41, km 12 to km 19">
+        </div>
+        <div class="field">
+          <label for="aa_reference">Administrative Approval reference</label>
+          <input id="aa_reference" name="aa_reference" required placeholder="AA/RB/2026/118">
+        </div>
+      </div>
+      <div class="rowsplit">
+        <div class="field">
+          <label for="department">Department</label>
+          <select id="department" name="department" required></select>
+        </div>
+        <div class="field">
+          <label for="estimated_cost">Estimated cost (&#8377;)</label>
+          <input id="estimated_cost" name="estimated_cost" type="number" min="1" step="1" required placeholder="24500000">
+        </div>
+      </div>
+      <div class="field">
+        <label for="scope">Scope of work</label>
+        <textarea id="scope" name="scope" rows="2" placeholder="Widening of 7 km of two-lane carriageway to intermediate lane standard."></textarea>
+      </div>
+
+      <h3>Requirements bidders will price against</h3>
+      <div class="rowsplit">
+        <div class="field">
+          <label for="completion_days">Completion period (days)</label>
+          <input id="completion_days" name="completion_days" type="number" min="1" required placeholder="240">
+        </div>
+        <div class="field">
+          <label for="emd_amount">EMD (&#8377;)</label>
+          <input id="emd_amount" name="emd_amount" type="number" min="0" placeholder="490000">
+        </div>
+      </div>
+      <div class="rowsplit">
+        <div class="field">
+          <label for="eligibility">Eligibility criteria</label>
+          <input id="eligibility" name="eligibility" placeholder="Class I(A), one similar work of 40% value in 5 years">
+        </div>
+        <div class="field">
+          <label for="ld_per_week_pct">Liquidated damages (% per week)</label>
+          <input id="ld_per_week_pct" name="ld_per_week_pct" type="number" min="0" step="0.1" value="0.5">
+        </div>
+      </div>
+      <div class="rowsplit">
+        <div class="field">
+          <label for="site_lat">Site latitude</label>
+          <input id="site_lat" name="site_lat" type="number" step="any" placeholder="23.0225">
+        </div>
+        <div class="field">
+          <label for="site_lng">Site longitude</label>
+          <input id="site_lng" name="site_lng" type="number" step="any" placeholder="72.5714">
+        </div>
+      </div>
+
+      <h3>Bill of Quantities</h3>
+      <p class="meta">This is what the fingerprint seals. Change a quantity after publication and
+        the chain will say so.</p>
+      <div id="boq"></div>
+      <button type="button" id="addItem" class="ghost">Add BOQ item</button>
+
+      <div class="actions">
+        <button type="submit">Create package</button>
+        <span id="pkgMsg" class="meta"></span>
+      </div>
+    </form>
+  </div>
+</main>
+
+<script type="module">
+import { mountHeader, requireUser, api, esc, money } from '/common.js';
+
+const user = await requireUser();
+mountHeader('/tender.html');
+
+const rows = document.getElementById('rows');
+const detail = document.getElementById('detail');
+const meta = await api('/api/meta');
+
+const TONE = {
+  PACKAGE_DRAFT: '', PENDING_DEE: '', PENDING_TS: '', PENDING_PUBLISH: '',
+  PUBLISHED: 'ok', AWARDED: 'ok', PARKED: 'danger',
+};
+
+let selected = null;
+
+// --- list ---------------------------------------------------------------------------------------
+
+async function loadList() {
+  const { tenders } = await api('/api/tenders');
+  if (!tenders.length) {
+    rows.innerHTML = `<tr><td colspan="6" class="empty">No tenders yet.</td></tr>`;
+    return;
+  }
+  rows.innerHTML = tenders.map(t => `
+    <tr data-id="${t.id}" class="clickable">
+      <td><code>${esc(t.code)}</code></td>
+      <td>${esc(t.title)}<div class="meta">${esc(t.department)}</div></td>
+      <td>${money(t.estimated_cost)}</td>
+      <td><span class="pill ${TONE[t.status] ?? ''}">${esc(t.status_label)}</span></td>
+      <td>${t.waiting_on ? esc(t.waiting_on) : '&mdash;'}</td>
+      <td>${t.days_in_status} d</td>
+    </tr>`).join('');
+
+  for (const tr of rows.querySelectorAll('tr[data-id]')) {
+    tr.onclick = () => showDetail(tr.dataset.id);
+  }
+  if (selected) showDetail(selected);
+}
+
+// --- detail + the gates ---------------------------------------------------------------------------
+
+async function showDetail(id) {
+  selected = id;
+  const { tender: t, events, available_actions } = await api(`/api/tenders/${id}`);
+  const boq = t.boq ?? [];
+
+  detail.innerHTML = `
+    <h2>${esc(t.code)} &mdash; ${esc(t.title)}</h2>
+    <div class="card">
+      <div class="rowsplit">
+        <div><div class="k">Estimated cost</div><div class="v">${money(t.estimated_cost)}</div></div>
+        <div><div class="k">Completion period</div><div class="v">${t.completion_days} days</div></div>
+      </div>
+      <div class="rowsplit">
+        <div><div class="k">EMD</div><div class="v">${money(t.emd_amount)}</div></div>
+        <div><div class="k">LD</div><div class="v">${t.ld_per_week_pct}% per week</div></div>
+      </div>
+      <p class="meta">AA reference ${esc(t.aa_reference)}
+        ${t.budget_head ? `&middot; budget head ${esc(t.budget_head)}` : ''}
+        ${t.bid_due_date ? `&middot; bids close ${new Date(t.bid_due_date).toLocaleDateString()}` : ''}</p>
+      <p class="meta">Package fingerprint <code>${esc(t.package_sha256.slice(0, 32))}&hellip;</code></p>
+      ${t.scope ? `<p>${esc(t.scope)}</p>` : ''}
+
+      <h3>Bill of Quantities</h3>
+      <table>
+        <thead><tr><th>Item</th><th>Unit</th><th>Quantity</th><th>Rate</th></tr></thead>
+        <tbody>${boq.map(i => `<tr>
+          <td>${esc(i.description)}</td><td>${esc(i.unit)}</td>
+          <td>${i.quantity}</td><td>${i.rate ? money(i.rate) : '&mdash;'}</td></tr>`).join('')}</tbody>
+      </table>
+
+      <h3>On the ledger</h3>
+      <table>
+        <thead><tr><th>Seq</th><th>Event</th><th>By</th><th>When</th><th>Note</th></tr></thead>
+        <tbody>${events.map(e => `<tr>
+          <td>${e.seq}</td><td><code>${esc(e.event)}</code></td>
+          <td>${esc(e.actor_role)}</td>
+          <td>${new Date(e.timestamp).toLocaleDateString()}</td>
+          <td>${esc(e.comment)}</td></tr>`).join('')}</tbody>
+      </table>
+
+      <div id="gate"></div>
+    </div>`;
+
+  renderActions(t, available_actions);
+  detail.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function renderActions(t, actions) {
+  const gate = document.getElementById('gate');
+  if (!actions.length) {
+    gate.innerHTML = `<p class="meta">Nothing for you to do here &mdash; this tender is
+      ${t.waiting_on ? `with the ${esc(t.waiting_on)}` : esc(t.status_label)}.</p>`;
+    return;
+  }
+
+  gate.innerHTML = `<h3>Your move, ${esc(user.role)}</h3>` + actions.map(a => `
+    <form class="gate" data-action="${a.action}">
+      ${a.needsComment ? `<div class="field">
+        <label>Reason (goes on the ledger)</label>
+        <input name="comment" required placeholder="Why this is going back"></div>` : ''}
+      ${a.action === 'accord_ts' ? `<div class="field">
+        <label>Budget head</label>
+        <input name="budget_head" required placeholder="BE-2026-41"></div>` : ''}
+      ${a.action === 'publish_itt' ? `<div class="rowsplit">
+        <div class="field"><label>Last date for bids</label>
+          <input name="bid_due_date" type="date" required></div>
+        <div class="field"><label>DSC PIN</label>
+          <input name="dsc_pin" type="password" required placeholder="····"></div></div>` : ''}
+      ${a.action === 'award' ? `<div class="field">
+        <label>Contractor on record</label>
+        <input name="contractor" required placeholder="Sardar Constructions Pvt Ltd"></div>` : ''}
+      <div class="actions">
+        <button type="submit" class="${a.tone === 'danger' ? 'danger' : ''}">${esc(a.label)}</button>
+        <span class="meta out"></span>
+      </div>
+    </form>`).join('');
+
+  for (const form of gate.querySelectorAll('form.gate')) {
+    form.onsubmit = async ev => {
+      ev.preventDefault();
+      const out = form.querySelector('.out');
+      const body = { action: form.dataset.action };
+      for (const [k, v] of new FormData(form)) body[k] = v;
+      if (body.bid_due_date) body.bid_due_date = new Date(body.bid_due_date).toISOString();
+      try {
+        const r = await api(`/api/tenders/${selected}/action`, { method: 'POST', body });
+        out.textContent = r.project
+          ? `Work order recorded — project ${r.project.code} opened at DRAFT (ledger seq ${r.entry.seq})`
+          : `Recorded at ledger seq ${r.entry.seq}`;
+        out.className = 'meta out ok';
+        await loadList();
+      } catch (err) {
+        out.textContent = err.message;
+        out.className = 'meta out danger';
+      }
+    };
+  }
+}
+
+// --- creating a package ----------------------------------------------------------------------------
+
+const canPrepare = user.role === 'JE' || user.role === 'AE';
+if (canPrepare) {
+  document.getElementById('newHead').hidden = false;
+  document.getElementById('newCard').hidden = false;
+
+  const dept = document.getElementById('department');
+  dept.innerHTML = meta.departments.map(d => `<option>${esc(d)}</option>`).join('');
+
+  const boq = document.getElementById('boq');
+  const addItem = () => {
+    const row = document.createElement('div');
+    row.className = 'rowsplit boq-item';
+    row.innerHTML = `
+      <div class="field"><label>Description</label><input name="description" required placeholder="Earthwork in excavation"></div>
+      <div class="field"><label>Unit</label><input name="unit" required placeholder="cum"></div>
+      <div class="field"><label>Quantity</label><input name="quantity" type="number" min="0.01" step="any" required placeholder="1200"></div>
+      <div class="field"><label>Rate (&#8377;)</label><input name="rate" type="number" min="0" step="any" placeholder="185"></div>`;
+    boq.append(row);
+  };
+  addItem();
+  document.getElementById('addItem').onclick = addItem;
+
+  document.getElementById('pkg').onsubmit = async ev => {
+    ev.preventDefault();
+    const msg = document.getElementById('pkgMsg');
+    const f = ev.target;
+    const body = {
+      title: f.title.value, aa_reference: f.aa_reference.value,
+      department: f.department.value, scope: f.scope.value,
+      estimated_cost: Number(f.estimated_cost.value),
+      completion_days: Number(f.completion_days.value),
+      emd_amount: Number(f.emd_amount.value || 0),
+      eligibility: f.eligibility.value,
+      ld_per_week_pct: Number(f.ld_per_week_pct.value || 0.5),
+      site_lat: f.site_lat.value ? Number(f.site_lat.value) : null,
+      site_lng: f.site_lng.value ? Number(f.site_lng.value) : null,
+      boq: [...boq.querySelectorAll('.boq-item')].map(r => ({
+        description: r.querySelector('[name=description]').value,
+        unit: r.querySelector('[name=unit]').value,
+        quantity: Number(r.querySelector('[name=quantity]').value),
+        rate: Number(r.querySelector('[name=rate]').value || 0),
+      })),
+    };
+    try {
+      const r = await api('/api/tenders', { method: 'POST', body });
+      msg.textContent = `${r.tender.code} created — sealed at ledger seq ${r.entry.seq}`;
+      msg.className = 'meta ok';
+      f.reset();
+      boq.innerHTML = ''; addItem();
+      await loadList();
+      showDetail(r.tender.id);
+    } catch (err) {
+      msg.textContent = err.message;
+      msg.className = 'meta danger';
+    }
+  };
+}
+
+await loadList();
+</script>
+</body>
+</html>

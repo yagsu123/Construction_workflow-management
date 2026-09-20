@@ -247,3 +247,4 @@ tr.broken td { background: color-mix(in srgb, var(--danger) 9%, transparent); }
 .accounts li:last-child { border-bottom: 0; }
 .accounts button { margin-left: auto; padding: 4px 10px; font-size: 13px; }
 .error { color: var(--danger); font-size: 13.5px; margin: 0 0 12px; }
+.verdict.warn { border-left-color: var(--warn); }

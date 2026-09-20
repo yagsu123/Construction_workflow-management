@@ -9,7 +9,7 @@
 <body>
 <main>
   <h1>Projects</h1>
-  <p class="lede">Detailed Project Reports moving through JE &rarr; AE &rarr; Finance &rarr; Executive Engineer.</p>
+  <p class="lede">Detailed Project Reports moving through JE &rarr; AE &rarr; DEE &rarr; Executive Engineer.</p>
 
   <div class="card" style="padding:0;overflow-x:auto">
     <table>
@@ -43,6 +43,19 @@
           <input id="contractor" name="contractor" placeholder="M/s Patel Infra Pvt Ltd">
         </div>
       </div>
+      <div class="rowsplit">
+        <div class="field">
+          <label for="site">Site location (geofence centre)</label>
+          <div class="actions">
+            <button type="button" id="siteFix">Use my location</button>
+            <span class="muted mono" id="siteOut">optional — no geofence if left blank</span>
+          </div>
+        </div>
+        <div class="field">
+          <label for="radius">Geofence radius (m)</label>
+          <input id="radius" type="number" min="25" step="25" placeholder="250">
+        </div>
+      </div>
       <div class="actions">
         <button class="primary" type="submit">Create DPR</button>
         <span class="muted">Created as a draft with the JE. Submitting it for test-check is a separate, ledgered action.</span>
@@ -53,6 +66,9 @@
 
 <script type="module">
 import { mountHeader, requireUser, getRole, api, esc, money, toast } from '/common.js';
+import { getPosition, coords } from '/emb.js';
+
+let site = null;
 
 await requireUser();
 mountHeader('/');
@@ -97,12 +113,30 @@ document.getElementById('dpr').addEventListener('submit', async e => {
   try {
     const { project } = await api('/api/projects', {
       method: 'POST',
-      body: { title: f.title.value, budget: f.budget.value, department: f.department.value, contractor: f.contractor.value },
+      body: {
+        title: f.title.value, budget: f.budget.value,
+        department: f.department.value, contractor: f.contractor.value,
+        site_lat: site?.lat ?? null, site_lng: site?.lng ?? null,
+        site_radius_m: document.getElementById('radius').value || null,
+      },
     });
     toast(`${project.code} created`);
     f.reset();
     load();
   } catch (err) { toast(err.message, 'danger'); }
+});
+
+document.getElementById('siteFix')?.addEventListener('click', async e => {
+  e.target.disabled = true;
+  const out = document.getElementById('siteOut');
+  out.textContent = 'locating…';
+  try {
+    site = await getPosition();
+    out.textContent = `${coords(site.lat, site.lng)} ±${Math.round(site.accuracy)} m`;
+  } catch (err) {
+    site = null;
+    out.textContent = err.message;
+  } finally { e.target.disabled = false; }
 });
 
 if (getRole() === 'JE') {

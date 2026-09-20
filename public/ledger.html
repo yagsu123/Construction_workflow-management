@@ -34,6 +34,14 @@ function banner(d) {
   if (d.length === 0) {
     return `<div class="card"><p class="muted" style="margin:0">The chain is empty. Run <code>npm run seed</code>, or create a project.</p></div>`;
   }
+  if (d.stale_schema) {
+    return `<div class="card verdict warn">
+      <div><strong>Ledger predates a schema change</strong> — these entries were hashed under an
+        older payload shape (v${d.schema.version}; the code is at v${d.schema.current}), so they
+        cannot recompute. This is a migration, not tampering.</div>
+      <div class="meta">Run <code>npm run seed</code> to rebuild the chain.</div>
+    </div>`;
+  }
   if (d.valid) {
     return `<div class="card verdict ok">
       <div><strong>Chain valid</strong> — all ${d.length} entries recompute, and ${d.anchors.checked}

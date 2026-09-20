@@ -44,8 +44,8 @@ function reseed() {
 }
 
 function pickVerified() {
-  const row = db.prepare(`SELECT * FROM approvals WHERE status = 'VERIFIED' ORDER BY seq LIMIT 1`).get();
-  if (!row) { console.log(`\n  ${Y}No Finance verification in the ledger. Run \`npm run seed\` first.${X}\n`); process.exit(1); }
+  const row = db.prepare(`SELECT * FROM approvals WHERE status = 'TECH_APPROVED' ORDER BY seq LIMIT 1`).get();
+  if (!row) { console.log(`\n  ${Y}No DEE technical approval in the ledger. Run \`npm run seed\` first.${X}\n`); process.exit(1); }
   return row;
 }
 
