@@ -56,7 +56,7 @@ export async function handleApi(req, res, url) {
     const chain = verifyChain(db);
     const anchors = checkAnchors(db);
     return json(res, 200, {
-      ok: true, service: 'pwd-infra-workflow', phase: 4, node: process.version,
+      ok: true, service: 'pwd-infra-workflow', phase: 5, node: process.version,
       chain: { length: chain.length, valid: chain.valid, first_break: chain.first_break },
       anchors: { checked: anchors.checked, valid: anchors.valid },
       time: new Date().toISOString(),

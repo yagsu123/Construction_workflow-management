@@ -14,6 +14,7 @@ append-only, hash-linked record — and makes the *waiting* visible.
 ```bash
 git clone https://github.com/yagsu123/Construction_workflow-management.git
 cd Construction_workflow-management
+npm run seed     # load the demo dataset
 npm start
 ```
 
@@ -80,10 +81,14 @@ Phases 0–2 of 6 complete.
 - **Phase 4** — ledger viewer with a live integrity verdict, and a delay dashboard that
   attributes waiting time to the role holding each file
 
+- **Phase 5** — demo dataset: five projects spread across the workflow, one rotting at the
+  AE test-check, one showing a full AE rejection and recovery
+
 Testing: `npm test` (34 unit), `npm run stress` (41 adversarial checks against a live server),
 `npm run verify` (ledger integrity). See [`TESTING.md`](./TESTING.md).
+Running the demo, screen by screen: [`DEMO.md`](./DEMO.md).
 
-Next: seed data (Phase 5), demo rehearsal (Phase 6).
+Next: demo rehearsal (Phase 6).
 
 The full phase plan, including the Indian-context revision that introduced the AE gate, is in
 [`docs/build-plan.md`](./docs/build-plan.md).
