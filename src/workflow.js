@@ -102,6 +102,39 @@ export function act(db, { projectId, role, action, comment = '' }) {
   return { project: getProject(db, project.id), entry, transition: t };
 }
 
+/**
+ * Record a geo-tagged e-MB measurement. Only the JE takes site measurements, and not after
+ * the smart contract has fired. The photo's own SHA-256 goes into the ledger payload, so
+ * swapping the image file on disk is detectable too.
+ */
+export function recordMeasurement(db, { projectId, role, photo_url, photo_sha256, lat, lng, note = '' }) {
+  const project = getProject(db, projectId);
+
+  if (role !== 'JE') throw new WorkflowError(`Only the JE records site measurements — you are acting as ${role}.`);
+  if (project.current_stage === 'PAYMENT_TRIGGERED') {
+    throw new WorkflowError('Payment has already been triggered; the measurement book is closed.');
+  }
+
+  const latitude = Number(lat), longitude = Number(lng);
+  if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90) {
+    throw new WorkflowError('Latitude is missing or out of range — allow location access and try again.');
+  }
+  if (!Number.isFinite(longitude) || longitude < -180 || longitude > 180) {
+    throw new WorkflowError('Longitude is missing or out of range — allow location access and try again.');
+  }
+  if (!photo_url) throw new WorkflowError('A site photo is required');
+
+  const entry = appendLedgerEntry(db, 'MEASUREMENT', {
+    project_id: project.id,
+    photo_url, photo_sha256,
+    lat: latitude, lng: longitude,
+    note: String(note).trim(),
+    actor_role: 'JE',
+  });
+
+  return { project: getProject(db, project.id), entry };
+}
+
 export function daysInStage(project, now = new Date()) {
   return (now - new Date(project.stage_entered_at)) / 86_400_000;
 }

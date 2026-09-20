@@ -14,6 +14,7 @@
 
 <script type="module">
 import { mountHeader, api, getRole, esc, money, when, shortHash, toast, STATUS_TONE } from '/common.js';
+import { compressToDataUrl, getPosition, osmLink, coords } from '/emb.js';
 
 mountHeader('/');
 
@@ -45,11 +46,23 @@ function timeline(project) {
     const head = e.kind === 'APPROVAL'
       ? `<strong>${esc(e.status.replace(/_/g, ' '))}</strong> by <span class="pill">${esc(e.actor_role)}</span>`
       : `<strong>e-MB measurement</strong> by <span class="pill">${esc(e.actor_role)}</span>`;
+    const body = e.kind === 'MEASUREMENT'
+      ? `<div class="emb">
+           <a href="${esc(e.photo_url)}" target="_blank" rel="noopener">
+             <img src="${esc(e.photo_url)}" alt="Site photo at ${esc(coords(e.lat, e.lng))}" loading="lazy">
+           </a>
+           <div>
+             <a class="mono" href="${esc(osmLink(e.lat, e.lng))}" target="_blank" rel="noopener">${esc(coords(e.lat, e.lng))}</a>
+             ${e.note ? `<div class="comment">${esc(e.note)}</div>` : ''}
+             ${e.photo_sha256 ? `<div class="meta mono" style="margin-top:4px">photo ${esc(shortHash(e.photo_sha256))}</div>` : ''}
+           </div>
+         </div>`
+      : (e.comment ? `<div class="comment">${esc(e.comment)}</div>` : '');
     return `<li class="${tone}">
       ${head}
       <div class="meta">seq ${e.seq} · ${esc(when(e.timestamp))} ·
         <span class="mono">${esc(shortHash(e.prev_hash))} → ${esc(shortHash(e.hash))}</span></div>
-      ${e.comment ? `<div class="comment">${esc(e.comment)}</div>` : ''}
+      ${body}
     </li>`;
   }).join('')}</ul>`;
 }
@@ -72,6 +85,84 @@ function actionPanel(project, available) {
     <div class="actions">
       ${available.map(a => `<button data-action="${esc(a.action)}" class="${esc(a.tone)}">${esc(a.label)}</button>`).join('')}
     </div>`;
+}
+
+function embCard(project) {
+  if (getRole() !== 'JE') {
+    return `<h2>Geo-tagged e-MB</h2>
+      <div class="card"><p class="muted" style="margin:0">Site measurements are recorded by the JE.
+      Switch role in the header to add one.</p></div>`;
+  }
+  if (project.current_stage === 'PAYMENT_TRIGGERED') {
+    return `<h2>Geo-tagged e-MB</h2>
+      <div class="card"><p class="muted" style="margin:0">Payment has been triggered — the measurement book is closed.</p></div>`;
+  }
+  return `
+    <h2>Geo-tagged e-MB</h2>
+    <div class="card">
+      <form id="embForm">
+        <div class="rowsplit">
+          <div class="field">
+            <label for="photo">Site photo</label>
+            <input id="photo" type="file" accept="image/*" capture="environment" required>
+          </div>
+          <div class="field">
+            <label for="note">Measurement note</label>
+            <input id="note" placeholder="BT layer laid, chainage 12.4 to 13.1 km">
+          </div>
+        </div>
+        <div class="actions">
+          <button type="button" id="fix">Get location fix</button>
+          <span class="muted mono" id="fixout">no coordinates yet</span>
+        </div>
+        <div class="actions" style="margin-top:12px">
+          <button class="primary" type="submit" id="embSubmit" disabled>Record on ledger</button>
+          <span class="muted">The photo, the coordinates and the timestamp are hashed together.</span>
+        </div>
+      </form>
+    </div>`;
+}
+
+function wireEmb() {
+  const form = document.getElementById('embForm');
+  if (!form) return;
+  const out = document.getElementById('fixout');
+  const submit = document.getElementById('embSubmit');
+  let fix = null;
+
+  document.getElementById('fix').addEventListener('click', async e => {
+    e.target.disabled = true;
+    out.textContent = 'locating…';
+    try {
+      fix = await getPosition();
+      out.textContent = `${coords(fix.lat, fix.lng)} ±${Math.round(fix.accuracy)} m`;
+      submit.disabled = false;
+    } catch (err) {
+      fix = null;
+      out.textContent = err.message;
+      toast(err.message, 'danger');
+    } finally {
+      e.target.disabled = false;
+    }
+  });
+
+  form.addEventListener('submit', async e => {
+    e.preventDefault();
+    if (!fix) return toast('Get a location fix first', 'danger');
+    submit.disabled = true;
+    try {
+      const photo = await compressToDataUrl(document.getElementById('photo').files[0]);
+      const r = await api(`/api/projects/${id}/measurement`, {
+        method: 'POST',
+        body: { role: getRole(), photo, lat: fix.lat, lng: fix.lng, note: document.getElementById('note').value },
+      });
+      toast(`e-MB recorded on the ledger at seq ${r.entry.seq}`);
+      render();
+    } catch (err) {
+      toast(err.message, 'danger');
+      submit.disabled = false;
+    }
+  });
 }
 
 async function render() {
@@ -99,8 +190,12 @@ async function render() {
       <div id="panel">${actionPanel(project, available_actions)}</div>
     </div>
 
+    ${embCard(project)}
+
     <h2>Ledger trail for this project</h2>
     <div class="card">${timeline(project)}</div>`;
+
+  wireEmb();
 
   view.querySelectorAll('#panel button[data-action]').forEach(btn => {
     btn.addEventListener('click', async () => {

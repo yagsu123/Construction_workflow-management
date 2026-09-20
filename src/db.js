@@ -50,6 +50,7 @@ CREATE TABLE IF NOT EXISTS measurements (
   lng        REAL    NOT NULL,
   note       TEXT    NOT NULL DEFAULT '',
   actor_role TEXT    NOT NULL DEFAULT 'JE',
+  photo_sha256 TEXT  NOT NULL DEFAULT '',
   timestamp  TEXT    NOT NULL,
   prev_hash  TEXT    NOT NULL,
   hash       TEXT    NOT NULL
@@ -63,7 +64,16 @@ export function openDb(dbPath = DB_PATH) {
   if (dbPath !== ':memory:') fs.mkdirSync(path.dirname(dbPath), { recursive: true });
   const db = new DatabaseSync(dbPath);
   db.exec(SCHEMA);
+  migrate(db);
   return db;
+}
+
+// Additive migrations for databases created by an earlier phase.
+function migrate(db) {
+  const cols = db.prepare('PRAGMA table_info(measurements)').all().map(c => c.name);
+  if (!cols.includes('photo_sha256')) {
+    db.exec(`ALTER TABLE measurements ADD COLUMN photo_sha256 TEXT NOT NULL DEFAULT ''`);
+  }
 }
 
 let singleton = null;

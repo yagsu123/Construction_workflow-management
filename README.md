@@ -71,8 +71,10 @@ Phases 0–2 of 6 complete.
 - **Phase 1** — schema, `appendLedgerEntry()`, `verifyChain()`, 11 passing tests
 - **Phase 2** — DPR submission, stage stepper, role switcher, approve/reject with
   rejections looping back to the JE and recorded on the ledger
+- **Phase 3** — geo-tagged e-MB capture: photo + GPS fix + note, with the photo's own
+  SHA-256 inside the ledger payload, so swapping the image file is detectable too
 
-Next: geo-tagged e-MB upload (Phase 3), then the ledger viewer and delay dashboard (Phase 4).
+Next: the ledger viewer and delay dashboard (Phase 4), seed data (Phase 5), demo rehearsal (Phase 6).
 
 ## Not in scope
 

@@ -203,3 +203,12 @@ a.plain:hover { text-decoration: underline; }
   .rolebox { width: 100%; }
   .rolebox select { flex: 1; min-width: 0; }
 }
+
+/* --- e-MB entries -------------------------------------------------------- */
+.emb { display: flex; gap: 12px; margin-top: 6px; align-items: flex-start; }
+.emb img {
+  width: 104px; height: 104px; object-fit: cover;
+  border-radius: 6px; border: 1px solid var(--border); display: block;
+}
+.emb > div { flex: 1; min-width: 0; }
+input[type="file"] { padding: 6px; }

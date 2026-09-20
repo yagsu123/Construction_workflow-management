@@ -49,6 +49,7 @@ export function measurementPayload(row) {
     seq: Number(row.seq),
     project_id: Number(row.project_id),
     photo_url: row.photo_url,
+    photo_sha256: row.photo_sha256 ?? '',
     lat: Number(row.lat),
     lng: Number(row.lng),
     note: row.note ?? '',
@@ -109,9 +110,9 @@ export function appendLedgerEntry(db, entryType, data) {
            row.comment ?? '', timestamp, prev_hash, hash).lastInsertRowid;
   } else {
     id = db.prepare(`
-      INSERT INTO measurements (seq, project_id, photo_url, lat, lng, note, actor_role, timestamp, prev_hash, hash)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(seq, row.project_id, row.photo_url, row.lat, row.lng,
+      INSERT INTO measurements (seq, project_id, photo_url, photo_sha256, lat, lng, note, actor_role, timestamp, prev_hash, hash)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(seq, row.project_id, row.photo_url, row.photo_sha256 ?? '', row.lat, row.lng,
            row.note ?? '', row.actor_role ?? 'JE', timestamp, prev_hash, hash).lastInsertRowid;
   }
 
@@ -122,12 +123,12 @@ export function appendLedgerEntry(db, entryType, data) {
 export function readChain(db) {
   return db.prepare(`
     SELECT 'APPROVAL' AS entry_type, id, seq, project_id, stage, actor_role, status, comment,
-           NULL AS photo_url, NULL AS lat, NULL AS lng, NULL AS note,
+           NULL AS photo_url, NULL AS photo_sha256, NULL AS lat, NULL AS lng, NULL AS note,
            timestamp, prev_hash, hash
       FROM approvals
     UNION ALL
     SELECT 'MEASUREMENT' AS entry_type, id, seq, project_id, NULL, actor_role, NULL, NULL,
-           photo_url, lat, lng, note,
+           photo_url, photo_sha256, lat, lng, note,
            timestamp, prev_hash, hash
       FROM measurements
     ORDER BY seq ASC

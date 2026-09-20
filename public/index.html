@@ -3,124 +3,127 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Projects — PWD Infrastructure Workflow</title>
+<title>PWD Infrastructure Workflow</title>
 <link rel="stylesheet" href="/app.css">
 </head>
 <body>
-<main>
-  <h1>Projects</h1>
-  <p class="lede">Detailed Project Reports moving through JE &rarr; Finance &rarr; Executive Engineer.</p>
+<header class="topbar">
+  <div class="brand">PWD Infrastructure Workflow
+    <small>Digital MB approval &middot; tamper-evident ledger</small>
+  </div>
+  <div class="spacer"></div>
+  <div class="rolebox" id="rolebox" style="display:none">
+    <label for="role-select">Acting as:</label>
+    <select id="role-select"></select>
+  </div>
+  <nav class="topnav">
+    <a href="#" id="nav-projects" aria-current="page">Projects</a>
+    <a href="#" id="nav-ledger">Ledger</a>
+  </nav>
+</header>
 
-  <div class="card">
-    <table>
+<main id="app-root">
+  <!-- Content dynamically loaded here -->
+</main>
+
+<div id="toast" class="toast"></div>
+
+<!-- Templates -->
+<template id="tpl-projects">
+  <div class="rowsplit" style="align-items: center; margin-bottom: 24px;">
+    <h1 style="margin:0">Active Projects</h1>
+    <div style="text-align: right;" id="btn-new-project-container">
+      <button class="primary" id="btn-new-project">New DPR</button>
+    </div>
+  </div>
+  <div class="card" style="padding:0; overflow-x:auto;">
+    <table id="projects-table">
       <thead>
         <tr>
-          <th>Code</th><th>Project</th><th>Budget</th>
-          <th>Stage</th><th>Waiting on</th><th>In stage</th>
+          <th>Code</th>
+          <th>Title</th>
+          <th>Stage</th>
+          <th>Waiting on</th>
+          <th>Time in stage</th>
         </tr>
       </thead>
-      <tbody id="rows"><tr><td colspan="6" class="empty">Loading&hellip;</td></tr></tbody>
+      <tbody></tbody>
     </table>
   </div>
+</template>
 
-  <h2>New DPR submission</h2>
+<template id="tpl-project-detail">
+  <div style="margin-bottom: 16px;">
+    <a href="#" id="pd-back" class="plain muted">&larr; Back to projects</a>
+  </div>
+  <div class="rowsplit" style="align-items: baseline; margin-bottom: 24px;">
+    <h1 style="margin:0" id="pd-title"></h1>
+    <div class="mono muted" id="pd-code"></div>
+  </div>
   <div class="card">
-    <form id="dpr">
-      <div class="rowsplit">
-        <div class="field">
-          <label for="title">Project title</label>
-          <input id="title" name="title" required placeholder="Widening of SH-41, km 12 to km 19">
-        </div>
-        <div class="field">
-          <label for="budget">Sanctioned budget (₹)</label>
-          <input id="budget" name="budget" type="number" min="1" step="1" required placeholder="24500000">
+    <div class="stepper" id="pd-stepper"></div>
+  </div>
+  <div class="rowsplit">
+    <div class="card" style="flex:2">
+      <h2 style="margin-top:0">Project Details</h2>
+      <table>
+        <tbody>
+          <tr><th>Department</th><td id="pd-dept"></td></tr>
+          <tr><th>Budget</th><td id="pd-budget"></td></tr>
+          <tr><th>Contractor</th><td id="pd-contractor"></td></tr>
+        </tbody>
+      </table>
+      
+      <div id="pd-actions-container" style="margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--border); display: none;">
+        <h2 style="margin-top:0">Available Actions (<span id="pd-acting-as"></span>)</h2>
+        <div class="actions" id="pd-actions"></div>
+        <div id="pd-action-form" style="display:none; margin-top: 12px;">
+          <div class="field">
+            <label for="pd-comment">Reason / Note <span class="muted">(required for rejection)</span></label>
+            <input type="text" id="pd-comment" placeholder="...">
+          </div>
+          <button class="primary" id="pd-action-confirm">Confirm</button>
+          <button class="btn" id="pd-action-cancel">Cancel</button>
         </div>
       </div>
-      <div class="rowsplit">
-        <div class="field">
-          <label for="department">Department</label>
-          <select id="department" name="department" required></select>
-        </div>
-        <div class="field">
-          <label for="contractor">Contractor (optional)</label>
-          <input id="contractor" name="contractor" placeholder="M/s Patel Infra Pvt Ltd">
-        </div>
+    </div>
+    <div class="card" style="flex:3">
+      <h2 style="margin-top:0">Audit Trail</h2>
+      <ul class="timeline" id="pd-timeline"></ul>
+    </div>
+  </div>
+</template>
+
+<template id="tpl-new-dpr">
+  <div style="margin-bottom: 16px;">
+    <a href="#" id="new-dpr-back" class="plain muted">&larr; Back to projects</a>
+  </div>
+  <h1 style="margin-bottom: 24px">Submit New DPR</h1>
+  <div class="card" style="max-width: 500px">
+    <form id="form-new-dpr">
+      <div class="field">
+        <label for="dpr-title">Project Title</label>
+        <input type="text" id="dpr-title" required>
       </div>
-      <div class="actions">
-        <button class="primary" type="submit">Create DPR</button>
-        <span class="muted" id="dprnote">Created as a draft with the JE. Submitting it to Finance is a separate, ledgered action.</span>
+      <div class="field">
+        <label for="dpr-dept">Department</label>
+        <select id="dpr-dept" required></select>
+      </div>
+      <div class="field">
+        <label for="dpr-budget">Budget (Rs)</label>
+        <input type="number" id="dpr-budget" min="1" step="any" required>
+      </div>
+      <div class="field">
+        <label for="dpr-contractor">Contractor (Optional)</label>
+        <input type="text" id="dpr-contractor">
+      </div>
+      <div class="actions" style="margin-top: 24px">
+        <button type="submit" class="primary">Submit DPR</button>
       </div>
     </form>
   </div>
-</main>
+</template>
 
-<script type="module">
-import { mountHeader, api, esc, money, toast } from '/common.js';
-
-mountHeader('/');
-
-const rows = document.getElementById('rows');
-
-function render(projects) {
-  if (!projects.length) {
-    rows.innerHTML = `<tr><td colspan="6" class="empty">No projects yet. Create a DPR below, or run <code>npm run seed</code>.</td></tr>`;
-    return;
-  }
-  rows.innerHTML = projects.map(p => `
-    <tr class="clickable" data-id="${p.id}">
-      <td class="mono">${esc(p.code)}</td>
-      <td><a class="plain" href="/project.html?id=${p.id}">${esc(p.title)}</a>
-          <div class="muted" style="font-size:12px">${esc(p.department)}</div></td>
-      <td>${money(p.budget)}</td>
-      <td><span class="pill ${p.current_stage === 'PAYMENT_TRIGGERED' ? 'ok' : ''}">${esc(p.stage_label)}</span></td>
-      <td>${p.waiting_on ? `<span class="pill muted">${esc(p.waiting_on)}</span>` : '<span class="muted">—</span>'}</td>
-      <td>${p.overdue
-            ? `<span class="pill danger">${p.days_in_stage} d · past SLA</span>`
-            : `${p.days_in_stage} d`}</td>
-    </tr>`).join('');
-
-  rows.querySelectorAll('tr.clickable').forEach(tr => {
-    tr.addEventListener('click', e => {
-      if (e.target.closest('a')) return;
-      location.href = `/project.html?id=${tr.dataset.id}`;
-    });
-  });
-}
-
-async function load() {
-  try {
-    const { projects } = await api('/api/projects');
-    render(projects);
-  } catch (err) {
-    rows.innerHTML = `<tr><td colspan="6" class="empty">${esc(err.message)}</td></tr>`;
-  }
-}
-
-api('/api/meta').then(({ departments }) => {
-  document.getElementById('department').innerHTML =
-    departments.map(d => `<option>${esc(d)}</option>`).join('');
-});
-
-document.getElementById('dpr').addEventListener('submit', async e => {
-  e.preventDefault();
-  const f = e.target;
-  try {
-    const { project } = await api('/api/projects', {
-      method: 'POST',
-      body: {
-        title: f.title.value, budget: f.budget.value,
-        department: f.department.value, contractor: f.contractor.value,
-      },
-    });
-    toast(`${project.code} created`);
-    f.reset();
-    load();
-  } catch (err) {
-    toast(err.message, 'danger');
-  }
-});
-
-load();
-</script>
+<script src="/app.js"></script>
 </body>
 </html>

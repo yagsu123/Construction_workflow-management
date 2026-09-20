@@ -3,8 +3,10 @@
 import { getDb } from './db.js';
 import { verifyChain } from './ledger.js';
 import {
-  createProject, getProject, act, decorate, listProjects, actionsFor, WorkflowError,
+  createProject, getProject, act, decorate, listProjects, actionsFor,
+  recordMeasurement, WorkflowError,
 } from './workflow.js';
+import { saveDataUrl, photoStillMatches } from './uploads.js';
 import { ROLES, ROLE_IDS, STAGES, STAGE_ORDER, DEPARTMENTS, SLA_DAYS } from './config.js';
 
 export function json(res, status, body) {
@@ -102,9 +104,39 @@ export async function handleApi(req, res, url) {
     });
   }
 
+  // --- geo-tagged e-MB measurements ---------------------------------------------------------
+  const measure = pathname.match(/^\/api\/projects\/(\d+)\/measurement$/);
+  if (measure && method === 'POST') {
+    const body = await readJsonBody(req, 8_000_000);
+    let saved;
+    try {
+      saved = saveDataUrl(body.photo);
+    } catch (err) {
+      throw new WorkflowError(err.message);
+    }
+    const result = recordMeasurement(db, {
+      projectId: Number(measure[1]),
+      role: requireRole(body.role),
+      photo_url: saved.url,
+      photo_sha256: saved.sha256,
+      lat: body.lat, lng: body.lng, note: body.note ?? '',
+    });
+    return json(res, 201, {
+      project: decorate(db, result.project),
+      entry: { seq: result.entry.seq, hash: result.entry.hash, prev_hash: result.entry.prev_hash },
+      photo: saved,
+    });
+  }
+
   // --- ledger -------------------------------------------------------------------------------
   if (pathname === '/api/ledger' && method === 'GET') {
     const chain = verifyChain(db);
+    // A measurement is only trustworthy if the image file on disk still hashes to what was signed.
+    for (const e of chain.entries) {
+      if (e.entry_type === 'MEASUREMENT' && e.photo_sha256) {
+        e.photo_check = photoStillMatches(e.photo_url, e.photo_sha256);
+      }
+    }
     return json(res, 200, {
       valid: chain.valid, length: chain.length, tip: chain.tip,
       first_break: chain.first_break, breaks: chain.breaks, entries: chain.entries,
