@@ -55,3 +55,8 @@ export const PORT = Number(process.env.PORT || 3000);
 // Override with DB_PATH=... to put it anywhere else.
 export const DB_PATH = process.env.DB_PATH
   || path.join(os.homedir(), '.pwd-infra-workflow', 'app.db');
+
+// The anchor log lives OUTSIDE the database on purpose — see src/anchor.js. Anchoring the
+// chain tip somewhere the database cannot reach is what catches a fully re-signed chain.
+export const ANCHOR_PATH = process.env.ANCHOR_PATH
+  || path.join(path.dirname(DB_PATH), 'anchors.log');

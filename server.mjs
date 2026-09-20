@@ -9,6 +9,8 @@ import { PORT } from './src/config.js';
 import { handleApi, json } from './src/api.js';
 import { WorkflowError } from './src/workflow.js';
 import { getDb } from './src/db.js';
+import { setAnchorSink } from './src/ledger.js';
+import { writeAnchor } from './src/anchor.js';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = path.join(ROOT, 'public');
@@ -53,6 +55,9 @@ const server = http.createServer(async (req, res) => {
 });
 
 getDb(); // fail fast if the database cannot be opened
+
+// Anchor the chain tip outside the database after every append. See src/anchor.js.
+setAnchorSink((length, tip) => writeAnchor(length, tip));
 
 server.listen(PORT, () => {
   console.log(`\n  PWD Infrastructure Workflow`);

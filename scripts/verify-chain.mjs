@@ -4,11 +4,14 @@
 
 import { getDb } from '../src/db.js';
 import { verifyChain } from '../src/ledger.js';
+import { checkAnchors } from '../src/anchor.js';
 
 const R = '\x1b[31m', G = '\x1b[32m', Y = '\x1b[33m', D = '\x1b[2m', X = '\x1b[0m';
 const short = h => `${h.slice(0, 10)}…${h.slice(-6)}`;
 
-const result = verifyChain(getDb());
+const db = getDb();
+const result = verifyChain(db);
+const anchors = checkAnchors(db);
 
 console.log(`\n  Ledger integrity check — ${result.length} entr${result.length === 1 ? 'y' : 'ies'}\n`);
 
@@ -33,8 +36,20 @@ for (const e of result.entries) {
   }
 }
 
+if (!anchors.valid) {
+  console.log(`\n  ${R}ANCHOR MISMATCH${X} — the chain is internally consistent but does not match what was`);
+  console.log(`  published. Somebody rewrote history and re-signed it.\n`);
+  for (const m of anchors.mismatches.slice(0, 3)) {
+    console.log(`    at length ${m.length}, anchored ${short(m.tip)} but the chain now gives ${short(m.current ?? 'missing')}`);
+    console.log(`    ${D}anchored at ${m.time}${X}`);
+  }
+  console.log(`\n  ${D}${anchors.checked} anchors checked.${X}\n`);
+  process.exit(1);
+}
+
 if (result.valid) {
-  console.log(`\n  ${G}CHAIN VALID${X} — every hash recomputes. Tip ${short(result.tip)}\n`);
+  console.log(`\n  ${G}CHAIN VALID${X} — every hash recomputes. Tip ${short(result.tip)}`);
+  console.log(`  ${G}ANCHORS MATCH${X} — ${anchors.checked} published tip${anchors.checked === 1 ? '' : 's'} agree with the chain.\n`);
   process.exit(0);
 }
 

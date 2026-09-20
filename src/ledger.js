@@ -116,8 +116,15 @@ export function appendLedgerEntry(db, entryType, data) {
            row.note ?? '', row.actor_role ?? 'JE', timestamp, prev_hash, hash).lastInsertRowid;
   }
 
+  if (anchorSink) anchorSink(seq, hash);
+
   return { id: Number(id), seq, prev_hash, hash, payload };
 }
+
+// Set by the app at startup. Kept as an injected sink so the ledger stays pure and the
+// unit tests can run without touching the filesystem.
+let anchorSink = null;
+export function setAnchorSink(fn) { anchorSink = fn; }
 
 /** Every entry of the unified chain, oldest first. */
 export function readChain(db) {

@@ -2,6 +2,7 @@
 
 import { getDb } from './db.js';
 import { verifyChain } from './ledger.js';
+import { checkAnchors } from './anchor.js';
 import {
   createProject, getProject, act, decorate, listProjects, actionsFor,
   recordMeasurement, WorkflowError,
@@ -53,9 +54,11 @@ export async function handleApi(req, res, url) {
   // --- metadata the UI builds itself from -------------------------------------------------
   if (pathname === '/api/health' && method === 'GET') {
     const chain = verifyChain(db);
+    const anchors = checkAnchors(db);
     return json(res, 200, {
       ok: true, service: 'pwd-infra-workflow', phase: 3, node: process.version,
       chain: { length: chain.length, valid: chain.valid, first_break: chain.first_break },
+      anchors: { checked: anchors.checked, valid: anchors.valid },
       time: new Date().toISOString(),
     });
   }
@@ -137,9 +140,12 @@ export async function handleApi(req, res, url) {
         e.photo_check = photoStillMatches(e.photo_url, e.photo_sha256);
       }
     }
+    const anchors = checkAnchors(db);
     return json(res, 200, {
-      valid: chain.valid, length: chain.length, tip: chain.tip,
-      first_break: chain.first_break, breaks: chain.breaks, entries: chain.entries,
+      valid: chain.valid && anchors.valid,
+      chain_valid: chain.valid, length: chain.length, tip: chain.tip,
+      first_break: chain.first_break, breaks: chain.breaks,
+      anchors, entries: chain.entries,
     });
   }
 
