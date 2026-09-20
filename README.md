@@ -65,7 +65,14 @@ the explicit non-goals are recorded in [`DECISIONS.md`](./DECISIONS.md).
 
 ## Status
 
-Phase 0 of 6 complete — scaffold up, stack locked, health check green.
+Phases 0–2 of 6 complete.
+
+- **Phase 0** — stack locked, scaffold up, health check green
+- **Phase 1** — schema, `appendLedgerEntry()`, `verifyChain()`, 11 passing tests
+- **Phase 2** — DPR submission, stage stepper, role switcher, approve/reject with
+  rejections looping back to the JE and recorded on the ledger
+
+Next: geo-tagged e-MB upload (Phase 3), then the ledger viewer and delay dashboard (Phase 4).
 
 ## Not in scope
 

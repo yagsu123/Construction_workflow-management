@@ -132,3 +132,74 @@ ol.phases li .pill { margin-left: 6px; }
   main { padding: 16px; }
   header.topbar { padding: 12px 16px; }
 }
+
+/* --- role switcher ------------------------------------------------------- */
+.rolebox { display: flex; align-items: center; gap: 8px; }
+.rolebox label { margin: 0; font-size: 12px; color: var(--muted); white-space: nowrap; }
+.rolebox select { width: auto; min-width: 190px; }
+
+/* --- stepper ------------------------------------------------------------- */
+.stepper { display: flex; gap: 0; margin: 4px 0 8px; overflow-x: auto; padding-bottom: 4px; }
+.step {
+  flex: 1 1 0;
+  min-width: 118px;
+  padding: 10px 12px;
+  border-top: 3px solid var(--border);
+  color: var(--muted);
+  font-size: 13px;
+}
+.step .n { font-size: 11px; letter-spacing: .06em; text-transform: uppercase; display: block; }
+.step .t { font-weight: 550; color: var(--text); opacity: .45; }
+.step.done { border-top-color: var(--ok); }
+.step.done .t { opacity: 1; color: var(--ok); }
+.step.current { border-top-color: var(--accent); }
+.step.current .t { opacity: 1; color: var(--accent); }
+.step.current.overdue { border-top-color: var(--danger); }
+.step.current.overdue .t { color: var(--danger); }
+
+/* --- timeline ------------------------------------------------------------ */
+.timeline { list-style: none; margin: 0; padding: 0; }
+.timeline li {
+  position: relative;
+  padding: 0 0 18px 22px;
+  border-left: 2px solid var(--border);
+}
+.timeline li:last-child { border-left-color: transparent; padding-bottom: 0; }
+.timeline li::before {
+  content: ""; position: absolute; left: -6px; top: 5px;
+  width: 10px; height: 10px; border-radius: 50%;
+  background: var(--surface); border: 2px solid var(--muted);
+}
+.timeline li.ok::before { border-color: var(--ok); }
+.timeline li.danger::before { border-color: var(--danger); }
+.timeline .meta { font-size: 12px; color: var(--muted); }
+.timeline .comment {
+  margin-top: 4px; padding: 7px 10px; border-radius: 6px;
+  background: var(--bg); border: 1px solid var(--border); font-size: 13.5px;
+}
+
+.actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.rowsplit { display: flex; gap: 16px; flex-wrap: wrap; }
+.rowsplit > * { flex: 1 1 240px; }
+.muted { color: var(--muted); }
+.empty { color: var(--muted); text-align: center; padding: 28px 12px; }
+tr.clickable { cursor: pointer; }
+tr.clickable:hover td { background: var(--accent-soft); }
+a.plain { color: inherit; text-decoration: none; }
+a.plain:hover { text-decoration: underline; }
+
+/* --- toast --------------------------------------------------------------- */
+.toast {
+  position: fixed; left: 50%; bottom: 24px; transform: translate(-50%, 16px);
+  background: var(--text); color: var(--surface);
+  padding: 10px 16px; border-radius: 8px; font-size: 14px;
+  opacity: 0; pointer-events: none; transition: opacity .18s, transform .18s;
+  max-width: calc(100vw - 32px);
+}
+.toast.show { opacity: 1; transform: translate(-50%, 0); }
+.toast.danger { background: var(--danger); color: #fff; }
+
+@media (max-width: 720px) {
+  .rolebox { width: 100%; }
+  .rolebox select { flex: 1; min-width: 0; }
+}

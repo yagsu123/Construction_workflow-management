@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Project — PWD Infrastructure Workflow</title>
+<link rel="stylesheet" href="/app.css">
+</head>
+<body>
+<main>
+  <p style="margin:0 0 8px"><a class="plain muted" href="/">&larr; All projects</a></p>
+  <div id="view"><p class="empty">Loading&hellip;</p></div>
+</main>
+
+<script type="module">
+import { mountHeader, api, getRole, esc, money, when, shortHash, toast, STATUS_TONE } from '/common.js';
+
+mountHeader('/');
+
+const id = new URLSearchParams(location.search).get('id');
+const view = document.getElementById('view');
+let meta = null;
+
+function stepper(project) {
+  return `<div class="stepper">${meta.stage_order.map((s, i) => {
+    const cls = i < project.stage_index ? 'done' : i === project.stage_index ? 'current' : '';
+    const overdue = i === project.stage_index && project.overdue ? ' overdue' : '';
+    return `<div class="step ${cls}${overdue}">
+      <span class="n">Step ${i + 1}</span>
+      <span class="t">${esc(meta.stages[s].label)}</span>
+    </div>`;
+  }).join('')}</div>`;
+}
+
+function timeline(project) {
+  const events = [
+    ...project.approvals.map(a => ({ ...a, kind: 'APPROVAL' })),
+    ...project.measurements.map(m => ({ ...m, kind: 'MEASUREMENT' })),
+  ].sort((a, b) => b.seq - a.seq);
+
+  if (!events.length) return `<p class="empty">Nothing on the ledger for this project yet.</p>`;
+
+  return `<ul class="timeline">${events.map(e => {
+    const tone = e.kind === 'APPROVAL' ? (STATUS_TONE[e.status] ?? '') : 'ok';
+    const head = e.kind === 'APPROVAL'
+      ? `<strong>${esc(e.status.replace(/_/g, ' '))}</strong> by <span class="pill">${esc(e.actor_role)}</span>`
+      : `<strong>e-MB measurement</strong> by <span class="pill">${esc(e.actor_role)}</span>`;
+    return `<li class="${tone}">
+      ${head}
+      <div class="meta">seq ${e.seq} · ${esc(when(e.timestamp))} ·
+        <span class="mono">${esc(shortHash(e.prev_hash))} → ${esc(shortHash(e.hash))}</span></div>
+      ${e.comment ? `<div class="comment">${esc(e.comment)}</div>` : ''}
+    </li>`;
+  }).join('')}</ul>`;
+}
+
+function actionPanel(project, available) {
+  const role = getRole();
+  if (project.current_stage === 'PAYMENT_TRIGGERED') {
+    return `<p class="muted">Smart contract executed — the payment trigger is recorded on the ledger. Nothing further to do.</p>`;
+  }
+  if (!available.length) {
+    return `<p class="muted">You are acting as <span class="pill">${esc(role)}</span>. This project is with
+      <span class="pill">${esc(project.waiting_on ?? '—')}</span> — switch role in the header to act on it.</p>`;
+  }
+  const needsComment = available.some(a => a.needsComment);
+  return `
+    ${needsComment ? `<div class="field">
+      <label for="comment">Reason / remarks</label>
+      <input id="comment" placeholder="Required when sending the file back to the JE">
+    </div>` : ''}
+    <div class="actions">
+      ${available.map(a => `<button data-action="${esc(a.action)}" class="${esc(a.tone)}">${esc(a.label)}</button>`).join('')}
+    </div>`;
+}
+
+async function render() {
+  const role = getRole();
+  const { project, available_actions } = await api(`/api/projects/${id}?role=${role}`);
+
+  document.title = `${project.code} — PWD Infrastructure Workflow`;
+  view.innerHTML = `
+    <h1>${esc(project.title)}</h1>
+    <p class="lede"><span class="mono">${esc(project.code)}</span> · ${esc(project.department)}
+      · ${money(project.budget)}${project.contractor ? ` · ${esc(project.contractor)}` : ''}</p>
+
+    <div class="card">
+      ${stepper(project)}
+      <p class="muted" style="margin:6px 0 0;font-size:13px">
+        ${project.waiting_on
+          ? `With <span class="pill">${esc(project.waiting_on)}</span> for ${project.days_in_stage} day${project.days_in_stage === 1 ? '' : 's'}`
+          : `At ${esc(project.stage_label)}`}
+        ${project.overdue ? ` · <span class="pill danger">past the ${project.sla_days}-day SLA</span>` : ''}
+      </p>
+    </div>
+
+    <div class="card">
+      <h2 style="margin-top:0">Your actions</h2>
+      <div id="panel">${actionPanel(project, available_actions)}</div>
+    </div>
+
+    <h2>Ledger trail for this project</h2>
+    <div class="card">${timeline(project)}</div>`;
+
+  view.querySelectorAll('#panel button[data-action]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const comment = view.querySelector('#comment')?.value ?? '';
+      view.querySelectorAll('#panel button').forEach(b => b.disabled = true);
+      try {
+        const r = await api(`/api/projects/${id}/action`, {
+          method: 'POST',
+          body: { role: getRole(), action: btn.dataset.action, comment },
+        });
+        toast(`Recorded on the ledger at seq ${r.entry.seq} — now ${r.moved_to.replace(/_/g, ' ')}`);
+        render();
+      } catch (err) {
+        toast(err.message, 'danger');
+        view.querySelectorAll('#panel button').forEach(b => b.disabled = false);
+      }
+    });
+  });
+}
+
+(async () => {
+  try {
+    meta = await api('/api/meta');
+    await render();
+  } catch (err) {
+    view.innerHTML = `<p class="empty">${esc(err.message)}</p>`;
+  }
+})();
+</script>
+</body>
+</html>

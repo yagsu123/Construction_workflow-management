@@ -3,68 +3,124 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>PWD Infrastructure Workflow</title>
+<title>Projects — PWD Infrastructure Workflow</title>
 <link rel="stylesheet" href="/app.css">
 </head>
 <body>
-<header class="topbar">
-  <div class="brand">PWD Infrastructure Workflow
-    <small>Digital MB approval &middot; tamper-evident ledger</small>
-  </div>
-  <div class="spacer"></div>
-  <nav class="topnav">
-    <a href="/" aria-current="page">Status</a>
-  </nav>
-</header>
-
 <main>
-  <h1>Phase 0 complete — stack locked</h1>
-  <p class="lede">Zero-dependency build. Node 22 + built-in SQLite + a SHA-256 hash chain.</p>
+  <h1>Projects</h1>
+  <p class="lede">Detailed Project Reports moving through JE &rarr; Finance &rarr; Executive Engineer.</p>
 
   <div class="card">
-    <h2 style="margin-top:0">Build progress</h2>
-    <ol class="phases">
-      <li>Scope &amp; stack lock-in <span class="pill ok">done</span></li>
-      <li>Data model &amp; hash-chain ledger <span class="pill muted">next</span></li>
-      <li>Workflow UI — submit &amp; approve <span class="pill muted">pending</span></li>
-      <li>Geo-tagged e-MB upload <span class="pill muted">pending</span></li>
-      <li>Ledger viewer &amp; delay dashboard <span class="pill muted">pending</span></li>
-      <li>Seed data <span class="pill muted">pending</span></li>
-      <li>Tamper-evidence demo <span class="pill muted">pending</span></li>
-    </ol>
-  </div>
-
-  <div class="card">
-    <h2 style="margin-top:0">Decisions locked</h2>
     <table>
-      <tbody>
-        <tr><th>Runtime</th><td>Node.js <span class="mono" id="nodever">&mdash;</span>, <code>node:http</code></td></tr>
-        <tr><th>Database</th><td>SQLite via built-in <code>node:sqlite</code> &mdash; no npm install</td></tr>
-        <tr><th>Ledger</th><td><code>hash = SHA256(payload + prev_hash)</code>, one chain for approvals and measurements</td></tr>
-        <tr><th>Roles</th><td><span class="pill">JE</span> <span class="pill">FIN</span> <span class="pill">EE</span> &mdash; dropdown switcher, no auth</td></tr>
-        <tr><th>Stages</th><td class="mono">DRAFT &rarr; PENDING_FINANCE &rarr; PENDING_EE &rarr; APPROVED &rarr; PAYMENT_TRIGGERED</td></tr>
-        <tr><th>SLA</th><td>7 days in a stage before a red flag</td></tr>
-      </tbody>
+      <thead>
+        <tr>
+          <th>Code</th><th>Project</th><th>Budget</th>
+          <th>Stage</th><th>Waiting on</th><th>In stage</th>
+        </tr>
+      </thead>
+      <tbody id="rows"><tr><td colspan="6" class="empty">Loading&hellip;</td></tr></tbody>
     </table>
-    <p style="color:var(--muted);font-size:13px;margin:12px 0 0">
-      Full rationale and non-goals in <code>DECISIONS.md</code>.
-    </p>
   </div>
 
+  <h2>New DPR submission</h2>
   <div class="card">
-    <h2 style="margin-top:0">Health check</h2>
-    <p class="mono" id="health">checking&hellip;</p>
+    <form id="dpr">
+      <div class="rowsplit">
+        <div class="field">
+          <label for="title">Project title</label>
+          <input id="title" name="title" required placeholder="Widening of SH-41, km 12 to km 19">
+        </div>
+        <div class="field">
+          <label for="budget">Sanctioned budget (₹)</label>
+          <input id="budget" name="budget" type="number" min="1" step="1" required placeholder="24500000">
+        </div>
+      </div>
+      <div class="rowsplit">
+        <div class="field">
+          <label for="department">Department</label>
+          <select id="department" name="department" required></select>
+        </div>
+        <div class="field">
+          <label for="contractor">Contractor (optional)</label>
+          <input id="contractor" name="contractor" placeholder="M/s Patel Infra Pvt Ltd">
+        </div>
+      </div>
+      <div class="actions">
+        <button class="primary" type="submit">Create DPR</button>
+        <span class="muted" id="dprnote">Created as a draft with the JE. Submitting it to Finance is a separate, ledgered action.</span>
+      </div>
+    </form>
   </div>
 </main>
 
-<script>
-fetch('/api/health')
-  .then(r => r.json())
-  .then(d => {
-    document.getElementById('health').textContent = JSON.stringify(d, null, 2);
-    document.getElementById('nodever').textContent = d.node;
-  })
-  .catch(e => { document.getElementById('health').textContent = 'unreachable: ' + e.message; });
+<script type="module">
+import { mountHeader, api, esc, money, toast } from '/common.js';
+
+mountHeader('/');
+
+const rows = document.getElementById('rows');
+
+function render(projects) {
+  if (!projects.length) {
+    rows.innerHTML = `<tr><td colspan="6" class="empty">No projects yet. Create a DPR below, or run <code>npm run seed</code>.</td></tr>`;
+    return;
+  }
+  rows.innerHTML = projects.map(p => `
+    <tr class="clickable" data-id="${p.id}">
+      <td class="mono">${esc(p.code)}</td>
+      <td><a class="plain" href="/project.html?id=${p.id}">${esc(p.title)}</a>
+          <div class="muted" style="font-size:12px">${esc(p.department)}</div></td>
+      <td>${money(p.budget)}</td>
+      <td><span class="pill ${p.current_stage === 'PAYMENT_TRIGGERED' ? 'ok' : ''}">${esc(p.stage_label)}</span></td>
+      <td>${p.waiting_on ? `<span class="pill muted">${esc(p.waiting_on)}</span>` : '<span class="muted">—</span>'}</td>
+      <td>${p.overdue
+            ? `<span class="pill danger">${p.days_in_stage} d · past SLA</span>`
+            : `${p.days_in_stage} d`}</td>
+    </tr>`).join('');
+
+  rows.querySelectorAll('tr.clickable').forEach(tr => {
+    tr.addEventListener('click', e => {
+      if (e.target.closest('a')) return;
+      location.href = `/project.html?id=${tr.dataset.id}`;
+    });
+  });
+}
+
+async function load() {
+  try {
+    const { projects } = await api('/api/projects');
+    render(projects);
+  } catch (err) {
+    rows.innerHTML = `<tr><td colspan="6" class="empty">${esc(err.message)}</td></tr>`;
+  }
+}
+
+api('/api/meta').then(({ departments }) => {
+  document.getElementById('department').innerHTML =
+    departments.map(d => `<option>${esc(d)}</option>`).join('');
+});
+
+document.getElementById('dpr').addEventListener('submit', async e => {
+  e.preventDefault();
+  const f = e.target;
+  try {
+    const { project } = await api('/api/projects', {
+      method: 'POST',
+      body: {
+        title: f.title.value, budget: f.budget.value,
+        department: f.department.value, contractor: f.contractor.value,
+      },
+    });
+    toast(`${project.code} created`);
+    f.reset();
+    load();
+  } catch (err) {
+    toast(err.message, 'danger');
+  }
+});
+
+load();
 </script>
 </body>
 </html>

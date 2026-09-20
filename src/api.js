@@ -1,0 +1,115 @@
+// JSON API. Routes return `true` if they handled the request.
+
+import { getDb } from './db.js';
+import { verifyChain } from './ledger.js';
+import {
+  createProject, getProject, act, decorate, listProjects, actionsFor, WorkflowError,
+} from './workflow.js';
+import { ROLES, ROLE_IDS, STAGES, STAGE_ORDER, DEPARTMENTS, SLA_DAYS } from './config.js';
+
+export function json(res, status, body) {
+  const payload = JSON.stringify(body);
+  res.writeHead(status, {
+    'content-type': 'application/json; charset=utf-8',
+    'content-length': Buffer.byteLength(payload),
+    'cache-control': 'no-store',
+  });
+  res.end(payload);
+}
+
+function readJsonBody(req, limit = 1_000_000) {
+  return new Promise((resolve, reject) => {
+    let size = 0;
+    const chunks = [];
+    req.on('data', c => {
+      size += c.length;
+      if (size > limit) { reject(new WorkflowError('Request body too large', 413)); req.destroy(); return; }
+      chunks.push(c);
+    });
+    req.on('end', () => {
+      const raw = Buffer.concat(chunks).toString('utf8');
+      if (!raw) return resolve({});
+      try { resolve(JSON.parse(raw)); }
+      catch { reject(new WorkflowError('Body is not valid JSON')); }
+    });
+    req.on('error', reject);
+  });
+}
+
+function requireRole(role) {
+  if (!ROLE_IDS.includes(role)) {
+    throw new WorkflowError(`Unknown role "${role}". Expected one of ${ROLE_IDS.join(', ')}.`);
+  }
+  return role;
+}
+
+export async function handleApi(req, res, url) {
+  const db = getDb();
+  const { pathname } = url;
+  const method = req.method;
+
+  // --- metadata the UI builds itself from -------------------------------------------------
+  if (pathname === '/api/health' && method === 'GET') {
+    const chain = verifyChain(db);
+    return json(res, 200, {
+      ok: true, service: 'pwd-infra-workflow', phase: 2, node: process.version,
+      chain: { length: chain.length, valid: chain.valid, first_break: chain.first_break },
+      time: new Date().toISOString(),
+    });
+  }
+
+  if (pathname === '/api/meta' && method === 'GET') {
+    return json(res, 200, {
+      roles: ROLES, stages: STAGES, stage_order: STAGE_ORDER,
+      departments: DEPARTMENTS, sla_days: SLA_DAYS,
+    });
+  }
+
+  // --- projects ----------------------------------------------------------------------------
+  if (pathname === '/api/projects' && method === 'GET') {
+    return json(res, 200, { projects: listProjects(db) });
+  }
+
+  if (pathname === '/api/projects' && method === 'POST') {
+    const body = await readJsonBody(req);
+    const project = createProject(db, body);
+    return json(res, 201, { project: decorate(db, project) });
+  }
+
+  const detail = pathname.match(/^\/api\/projects\/(\d+)$/);
+  if (detail && method === 'GET') {
+    const project = getProject(db, Number(detail[1]));
+    const role = url.searchParams.get('role');
+    return json(res, 200, {
+      project: decorate(db, project),
+      available_actions: role && ROLE_IDS.includes(role) ? actionsFor(project.current_stage, role) : [],
+    });
+  }
+
+  const action = pathname.match(/^\/api\/projects\/(\d+)\/action$/);
+  if (action && method === 'POST') {
+    const body = await readJsonBody(req);
+    const result = act(db, {
+      projectId: Number(action[1]),
+      role: requireRole(body.role),
+      action: body.action,
+      comment: body.comment ?? '',
+    });
+    return json(res, 200, {
+      project: decorate(db, result.project),
+      entry: { seq: result.entry.seq, hash: result.entry.hash, prev_hash: result.entry.prev_hash },
+      moved_to: result.transition.to,
+    });
+  }
+
+  // --- ledger -------------------------------------------------------------------------------
+  if (pathname === '/api/ledger' && method === 'GET') {
+    const chain = verifyChain(db);
+    return json(res, 200, {
+      valid: chain.valid, length: chain.length, tip: chain.tip,
+      first_break: chain.first_break, breaks: chain.breaks, entries: chain.entries,
+    });
+  }
+
+  return json(res, 404, { error: 'No such endpoint', endpoint: pathname });
+}
