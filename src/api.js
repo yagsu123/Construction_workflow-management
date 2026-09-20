@@ -54,7 +54,7 @@ export async function handleApi(req, res, url) {
   if (pathname === '/api/health' && method === 'GET') {
     const chain = verifyChain(db);
     return json(res, 200, {
-      ok: true, service: 'pwd-infra-workflow', phase: 2, node: process.version,
+      ok: true, service: 'pwd-infra-workflow', phase: 3, node: process.version,
       chain: { length: chain.length, valid: chain.valid, first_break: chain.first_break },
       time: new Date().toISOString(),
     });
