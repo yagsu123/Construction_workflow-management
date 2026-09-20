@@ -5,7 +5,7 @@ Three layers, in the order you should reach for them.
 | | Command | Needs a running server? | What it proves |
 |---|---|---|---|
 | **Unit** | `npm test` | no | The rules are right — the hash chain, the stage machine, the validators |
-| **Stress** | `npm run stress` | **yes** | The rules hold up under attack, over real HTTP |
+| **Stress** | `npm run stress` | no — it starts one | The rules hold up under attack, over real HTTP |
 | **Integrity** | `npm run verify` | no | The ledger in the database has not been touched |
 
 ---
@@ -62,15 +62,24 @@ awaiting the AE test-check'` tells you what broke when it goes red. `'test act()
 
 ## 2. Stress test — `npm run stress`
 
-This one is adversarial. It runs against a live server and actively tries to break it.
+This one is adversarial. It runs over real HTTP and actively tries to break the server.
 
 ```bash
-npm start            # terminal 1
-npm run stress       # terminal 2
+npm run stress
 ```
 
-Twelve sections, 41 checks:
+**One window is enough.** If nothing is listening it starts its own server on a spare port and
+shuts it down at the end. To point it at a server you started yourself:
 
+```bash
+npm start                              # window 1
+BASE=http://localhost:3000 npm run stress   # window 2
+```
+
+Thirteen sections, 54 checks:
+
+0. **Authentication** — acting while signed out, wrong passwords, forged session cookies, and
+   the old hole: signed in as JE while claiming `role: "EE"` in the body
 1. **Gate enforcement** — every role × every action × every stage (95 illegal combinations)
 2. **The AE gate** — Finance and the EE both trying to skip the test-check
 3. **Replay** — submitting twice, triggering payment twice
@@ -169,8 +178,14 @@ The parts no script covers, because they need a real browser:
 you should get a readable refusal, not a silent failure. Browsers only give coordinates on
 `localhost` or HTTPS; on a phone over the LAN it will be blocked, which is expected.
 
-**Role switching.** Change the dropdown on a project sitting at `PENDING_AE`. Only the AE
-should see buttons. Everyone else should see *"this project is with AE"*.
+**Sign-in.** Open a project at `PENDING_AE` as `je.patel`. No buttons. Sign out, sign in as
+`ae.shah`. Buttons appear. Then try to act without signing in at all:
+
+```bash
+curl -i -X POST http://localhost:3000/api/projects/1/action   -H 'content-type: application/json' -d '{"role":"EE","action":"approve"}'
+```
+
+`401 Not signed in` — and note the `role` in that body is ignored even with a valid session.
 
 **Escaping.** Create a project titled `<img src=x onerror=alert(1)>`. It must appear as
 literal text. If a dialog pops up, an `esc()` call is missing.

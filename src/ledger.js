@@ -36,6 +36,7 @@ export function approvalPayload(row) {
     project_id: Number(row.project_id),
     stage: row.stage,
     actor_role: row.actor_role,
+    actor_user: row.actor_user ?? '',
     status: row.status,
     comment: row.comment ?? '',
     timestamp: row.timestamp,
@@ -54,6 +55,7 @@ export function measurementPayload(row) {
     lng: Number(row.lng),
     note: row.note ?? '',
     actor_role: row.actor_role ?? 'JE',
+    actor_user: row.actor_user ?? '',
     timestamp: row.timestamp,
   };
 }
@@ -104,16 +106,16 @@ export function appendLedgerEntry(db, entryType, data) {
   let id;
   if (entryType === 'APPROVAL') {
     id = db.prepare(`
-      INSERT INTO approvals (seq, project_id, stage, actor_role, status, comment, timestamp, prev_hash, hash)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(seq, row.project_id, row.stage, row.actor_role, row.status,
+      INSERT INTO approvals (seq, project_id, stage, actor_role, actor_user, status, comment, timestamp, prev_hash, hash)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(seq, row.project_id, row.stage, row.actor_role, row.actor_user ?? '', row.status,
            row.comment ?? '', timestamp, prev_hash, hash).lastInsertRowid;
   } else {
     id = db.prepare(`
-      INSERT INTO measurements (seq, project_id, photo_url, photo_sha256, lat, lng, note, actor_role, timestamp, prev_hash, hash)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO measurements (seq, project_id, photo_url, photo_sha256, lat, lng, note, actor_role, actor_user, timestamp, prev_hash, hash)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(seq, row.project_id, row.photo_url, row.photo_sha256 ?? '', row.lat, row.lng,
-           row.note ?? '', row.actor_role ?? 'JE', timestamp, prev_hash, hash).lastInsertRowid;
+           row.note ?? '', row.actor_role ?? 'JE', row.actor_user ?? '', timestamp, prev_hash, hash).lastInsertRowid;
   }
 
   if (anchorSink) anchorSink(seq, hash);
@@ -129,12 +131,12 @@ export function setAnchorSink(fn) { anchorSink = fn; }
 /** Every entry of the unified chain, oldest first. */
 export function readChain(db) {
   return db.prepare(`
-    SELECT 'APPROVAL' AS entry_type, id, seq, project_id, stage, actor_role, status, comment,
+    SELECT 'APPROVAL' AS entry_type, id, seq, project_id, stage, actor_role, actor_user, status, comment,
            NULL AS photo_url, NULL AS photo_sha256, NULL AS lat, NULL AS lng, NULL AS note,
            timestamp, prev_hash, hash
       FROM approvals
     UNION ALL
-    SELECT 'MEASUREMENT' AS entry_type, id, seq, project_id, NULL, actor_role, NULL, NULL,
+    SELECT 'MEASUREMENT' AS entry_type, id, seq, project_id, NULL, actor_role, actor_user, NULL, NULL,
            photo_url, photo_sha256, lat, lng, note,
            timestamp, prev_hash, hash
       FROM measurements

@@ -30,13 +30,28 @@ and `git clone && npm start` now works on any machine with Node 22, with no netw
 
 ## Roles (hardcoded, no real auth)
 
+Ledger entries now record *who* acted, not only which role: `actor_user` carries a stable
+pseudonymous id derived from the account, so a rename cannot rewrite history.
+
 1. **JE** — Junior Engineer: creates DPRs, records geo-tagged e-MB entries from site
 2. **AE** — Assistant Engineer / Sub-Divisional Officer: **test-checks** the JE's physical
    measurements, re-verifying a prescribed percentage before the file may move for payment
 3. **FIN** — Finance / Accounts: verifies the claim against the sanctioned budget head
 4. **EE** — Executive Engineer: final approval, triggers the simulated smart contract
 
-Switched via a dropdown in the header. No login, no passwords, no sessions.
+**Revision 3 replaced the role dropdown with real sign-in.** The dropdown meant the client
+declared its own role and the server believed it — anyone with `curl` could approve their own
+bill as the Executive Engineer. For a system whose entire claim is accountability, that was not
+a shortcut, it was a contradiction. Roles now come from a password-protected session, and the
+`role` field in a request body is never read.
+
+Each role has one departmental account (`je.patel`, `ae.shah`, `fin.desai`, `ee.mehta`).
+Passwords are scrypt-hashed with a per-account salt and compared in constant time. Sessions are
+opaque 256-bit tokens in an `HttpOnly; SameSite=Strict` cookie, held in memory for 8 hours.
+
+Still demo-scale, and honestly so: fixed accounts, no password reset, no rate limiting, sessions
+lost on restart, one shared demo password shown on the login page. But there is no path from the
+browser to a role that does not go through a password.
 
 **Revision 2 added the AE.** The first cut routed the JE's measurements straight to Finance,
 which is not how an Indian PWD file actually moves — the AE test-check is mandatory, and
@@ -68,7 +83,8 @@ Not attempted, and not to be attempted later:
 - Real GIS / map tile APIs (coordinates shown as text + an OpenStreetMap link)
 - Multi-department parallel clearances (the workflow is strictly linear: JE → AE → FIN → EE)
 - File storage beyond the local `public/uploads/` folder
-- Real authentication, RBAC, or audit of *who* switched roles
+- Password reset, account management, rate limiting, or persistent sessions
+- Multi-user roles (one account per role, not per person)
 
 ## Stage machine
 

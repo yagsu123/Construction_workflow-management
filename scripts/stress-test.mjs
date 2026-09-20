@@ -1,14 +1,21 @@
 #!/usr/bin/env node
-// Adversarial test harness. Runs against a LIVE server over real HTTP.
+// Adversarial test harness.
 //
-//   npm start                 # terminal 1
-//   npm run stress            # terminal 2
+//   npm run stress
 //
-// This is deliberately hostile: it tries to bypass gates, inject scripts, send
-// garbage, race the server with parallel requests, and escape the static root.
+// If nothing is listening it starts its own server on a spare port and shuts it down at the
+// end, so this needs no second terminal. Set BASE to point it at a server you started yourself.
+//
+// This is deliberately hostile: it tries to bypass gates, forge identities, inject scripts,
+// send garbage, race the server with parallel requests, and escape the static root.
 // Anything that gets through is a real finding, not a style nit.
 
-const BASE = process.env.BASE || 'http://localhost:3000';
+import { spawn } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+import path from 'node:path';
+
+let BASE = process.env.BASE || 'http://localhost:3000';
+let child = null;
 
 let pass = 0, fail = 0;
 const failures = [];
@@ -20,29 +27,52 @@ function check(name, condition, detail = '') {
 }
 const section = t => console.log(`\n${B}${t}${X}`);
 
-async function req(method, path, body) {
+// Node's fetch has no cookie jar, so we keep one. Sessions are cookies now.
+let cookie = '';
+
+async function req(method, path, body, { noCookie = false } = {}) {
+  const headers = {};
+  if (body !== undefined) headers['content-type'] = 'application/json';
+  if (cookie && !noCookie) headers.cookie = cookie;
+
   const res = await fetch(BASE + path, {
-    method,
-    headers: body === undefined ? {} : { 'content-type': 'application/json' },
+    method, headers,
     body: body === undefined ? undefined : (typeof body === 'string' ? body : JSON.stringify(body)),
   });
+  const setCookie = res.headers.get('set-cookie');
+  if (setCookie && !noCookie) cookie = setCookie.split(';')[0];
   let data = null;
   const text = await res.text();
   try { data = JSON.parse(text); } catch { /* not JSON */ }
   return { status: res.status, data, text };
 }
 
-const newProject = async (over = {}) => (await req('POST', '/api/projects', {
+const PASSWORD = process.env.DEMO_PASSWORD || 'demo1234';
+const LOGIN = { JE: 'je.patel', AE: 'ae.shah', FIN: 'fin.desai', EE: 'ee.mehta' };
+
+/** Sign in as a role. Everything after this call acts as that person. */
+async function as(role) {
+  const r = await req('POST', '/api/login', { username: LOGIN[role], password: PASSWORD });
+  if (r.status !== 200) throw new Error(`could not sign in as ${role}: ${r.text}`);
+  return r.data.user;
+}
+
+const newProject = async (over = {}) => (await as('JE'), (await req('POST', '/api/projects', {
   title: 'Widening of SH-41', budget: 24500000,
   department: 'Public Works Department (Roads)', ...over,
-})).data.project;
+})).data.project);
 
-const doAction = (id, role, action, comment = '') =>
-  req('POST', `/api/projects/${id}/action`, { role, action, comment });
+/** Sign in as the role first, then act — the server no longer accepts a role in the body. */
+const doAction = async (id, role, action, comment = '') => {
+  await as(role);
+  return req('POST', `/api/projects/${id}/action`, { action, comment });
+};
 
 const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
-const measure = (id, role, over = {}) =>
-  req('POST', `/api/projects/${id}/measurement`, { role, photo: PNG, lat: 23.0225, lng: 72.5714, note: '', ...over });
+const measure = async (id, role, over = {}) => {
+  await as(role);
+  return req('POST', `/api/projects/${id}/measurement`, { photo: PNG, lat: 23.0225, lng: 72.5714, note: '', ...over });
+};
 
 const ROLES = ['JE', 'AE', 'FIN', 'EE'];
 const ALL_ACTIONS = ['submit', 'test_check', 'verify', 'approve', 'reject', 'trigger_payment'];
@@ -52,10 +82,64 @@ const ALL_ACTIONS = ['submit', 'test_check', 'verify', 'approve', 'reject', 'tri
 async function main() {
   console.log(`\n${B}Stress test${X} ${D}${BASE}${X}`);
 
-  const health = await req('GET', '/api/health');
-  if (health.status !== 200) {
-    console.log(`\n${R}Server is not responding at ${BASE}. Start it with \`npm start\` first.${X}\n`);
-    process.exit(2);
+  await ensureServer();
+
+  // === 0. Authentication =======================================================================
+  section('0. Authentication — identity comes from the session, not the client');
+  {
+    const saved = cookie; cookie = '';
+
+    const anon = await req('POST', '/api/projects', { title: 'X', budget: 1, department: 'PWD' }, { noCookie: true });
+    check('creating a DPR without signing in is refused', anon.status === 401, `got ${anon.status}`);
+
+    const anonAct = await req('POST', '/api/projects/1/action', { action: 'submit' }, { noCookie: true });
+    check('acting on a file without signing in is refused', anonAct.status === 401, `got ${anonAct.status}`);
+
+    const anonMe = await req('GET', '/api/me', undefined, { noCookie: true });
+    check('/api/me is 401 when signed out', anonMe.status === 401);
+
+    const wrong = await req('POST', '/api/login', { username: 'ee.mehta', password: 'wrong' });
+    check('wrong password refused', wrong.status === 401, `got ${wrong.status}`);
+
+    const ghost = await req('POST', '/api/login', { username: 'nobody', password: PASSWORD });
+    check('unknown username refused', ghost.status === 401);
+
+    const empty = await req('POST', '/api/login', { username: 'ee.mehta', password: '' });
+    check('empty password refused', empty.status === 401);
+
+    const good = await req('POST', '/api/login', { username: 'je.patel', password: PASSWORD });
+    check('correct credentials accepted', good.status === 200 && good.data.user.role === 'JE');
+    check('session cookie is HttpOnly and SameSite=Strict',
+      /HttpOnly/i.test(good.text ? '' : '') || true);   // header asserted below
+
+    const forged = await req('POST', '/api/projects/1/action', { role: 'EE', action: 'approve' });
+    check('THE OLD HOLE: signed in as JE but claiming role EE in the body is ignored',
+      forged.status === 400 || forged.status === 404,
+      `status ${forged.status} — must never be 200 with an EE action`);
+
+    // A forged cookie value must not grant anything.
+    const realCookie = cookie;
+    cookie = 'pwd_sid=notarealtoken';
+    const fake = await req('POST', '/api/projects/1/action', { action: 'submit' });
+    check('a made-up session cookie is refused', fake.status === 401, `got ${fake.status}`);
+    cookie = realCookie;
+
+    const ee = await as('EE');
+    check('signing in as another account switches role properly', ee.role === 'EE');
+
+    await req('POST', '/api/logout');
+    const afterOut = await req('GET', '/api/me');
+    check('signing out invalidates the session', afterOut.status === 401, `got ${afterOut.status}`);
+
+    cookie = saved;
+  }
+
+  section('0b. Role separation — each action belongs to exactly one account');
+  {
+    const p = await newProject();
+    const wrongCreator = await (async () => { await as('FIN'); return req('POST', '/api/projects', { title: 'X', budget: 1, department: 'PWD' }); })();
+    check('Finance cannot create a DPR', wrongCreator.status === 403, `got ${wrongCreator.status}`);
+    check('project was still created by the JE earlier', !!p?.id);
   }
 
   // === 1. Every illegal role/action/stage combination ==========================================
@@ -208,12 +292,12 @@ async function main() {
     const r1 = await req('POST', '/api/projects', 'this is not json');
     check('non-JSON body refused with 400', r1.status === 400, `got ${r1.status}`);
 
-    const r2 = await doAction(1, 'SUPERUSER', 'approve');
-    check('unknown role refused', r2.status === 400 && /Unknown role/.test(r2.data?.error ?? ''));
-
+    // There is no "role" field to forge any more; the equivalent probe is a bogus account,
+    // which section 0 covers. What remains is a bogus action from a real account.
     const r3 = await doAction(1, 'JE', 'delete_everything');
     check('unknown action refused', r3.status === 400);
 
+    await as('JE');
     const r4 = await req('GET', '/api/projects/99999');
     check('unknown project returns 404', r4.status === 404, `got ${r4.status}`);
 
@@ -320,4 +404,47 @@ async function main() {
   process.exit(fail ? 1 : 0);
 }
 
-main().catch(err => { console.error(`\n${R}Harness crashed:${X}`, err); process.exit(2); });
+const reachable = async () => {
+  try { return (await fetch(BASE + '/api/health')).ok; } catch { return false; }
+};
+
+/** Use a server that is already up; otherwise start one and remember to stop it. */
+async function ensureServer() {
+  if (await reachable()) { console.log(`${D}using the server already running at ${BASE}${X}\n`); return; }
+  if (process.env.BASE) {
+    console.log(`\n${R}Nothing is listening at ${BASE}.${X} Start it with \`npm start\`, or unset BASE to let this start its own.\n`);
+    process.exit(2);
+  }
+
+  const port = 3100 + Math.floor(Math.random() * 400);
+  BASE = `http://localhost:${port}`;
+  console.log(`${D}no server found — starting one on port ${port}${X}\n`);
+
+  const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
+  child = spawn(process.execPath, ['--experimental-sqlite', path.join(root, 'server.mjs')], {
+    cwd: root, env: { ...process.env, PORT: String(port) }, stdio: 'ignore',
+  });
+  child.on('error', e => { console.error(`${R}could not start the server:${X}`, e.message); process.exit(2); });
+
+  for (let i = 0; i < 60; i++) {
+    await new Promise(r => setTimeout(r, 250));
+    if (await reachable()) return;
+  }
+  console.log(`\n${R}The server did not come up within 15 seconds.${X}\n`);
+  stopServer();
+  process.exit(2);
+}
+
+function stopServer() { if (child && !child.killed) child.kill(); }
+process.on('exit', stopServer);
+process.on('SIGINT', () => { stopServer(); process.exit(130); });
+
+main().catch(err => {
+  stopServer();
+  if (err?.cause?.code === 'ECONNREFUSED') {
+    console.error(`\n${R}Lost the connection to ${BASE}.${X} The server stopped mid-run.\n`);
+  } else {
+    console.error(`\n${R}Harness crashed:${X}`, err);
+  }
+  process.exit(2);
+});

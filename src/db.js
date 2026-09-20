@@ -34,7 +34,8 @@ CREATE TABLE IF NOT EXISTS approvals (
   project_id INTEGER NOT NULL REFERENCES projects(id),
   stage      TEXT    NOT NULL,
   actor_role TEXT    NOT NULL,
-  status     TEXT    NOT NULL,          -- SUBMITTED | VERIFIED | APPROVED | REJECTED | PAYMENT_TRIGGERED
+  status     TEXT    NOT NULL,          -- SUBMITTED | TEST_CHECKED | VERIFIED | APPROVED | REJECTED | PAYMENT_TRIGGERED
+  actor_user TEXT    NOT NULL DEFAULT '',
   comment    TEXT    NOT NULL DEFAULT '',
   timestamp  TEXT    NOT NULL,
   prev_hash  TEXT    NOT NULL,
@@ -51,6 +52,7 @@ CREATE TABLE IF NOT EXISTS measurements (
   note       TEXT    NOT NULL DEFAULT '',
   actor_role TEXT    NOT NULL DEFAULT 'JE',
   photo_sha256 TEXT  NOT NULL DEFAULT '',
+  actor_user TEXT    NOT NULL DEFAULT '',
   timestamp  TEXT    NOT NULL,
   prev_hash  TEXT    NOT NULL,
   hash       TEXT    NOT NULL
@@ -70,10 +72,13 @@ export function openDb(dbPath = DB_PATH) {
 
 // Additive migrations for databases created by an earlier phase.
 function migrate(db) {
-  const cols = db.prepare('PRAGMA table_info(measurements)').all().map(c => c.name);
-  if (!cols.includes('photo_sha256')) {
-    db.exec(`ALTER TABLE measurements ADD COLUMN photo_sha256 TEXT NOT NULL DEFAULT ''`);
-  }
+  const add = (table, col, decl) => {
+    const cols = db.prepare(`PRAGMA table_info(${table})`).all().map(c => c.name);
+    if (!cols.includes(col)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${col} ${decl}`);
+  };
+  add('measurements', 'photo_sha256', `TEXT NOT NULL DEFAULT ''`);
+  add('measurements', 'actor_user', `TEXT NOT NULL DEFAULT ''`);
+  add('approvals', 'actor_user', `TEXT NOT NULL DEFAULT ''`);
 }
 
 let singleton = null;

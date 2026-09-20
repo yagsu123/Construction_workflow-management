@@ -33,7 +33,8 @@ Then open <http://localhost:3000>.
 
 ## How it works
 
-Four hardcoded roles, switched from a dropdown — no login:
+Four departmental accounts, one per role. **You sign in with a password** — the role is not
+something the browser can choose:
 
 ```
 JE  (records geo-tagged MB entries from site)
@@ -83,9 +84,14 @@ Phases 0–2 of 6 complete.
 
 - **Phase 5** — demo dataset: five projects spread across the workflow, one rotting at the
   AE test-check, one showing a full AE rejection and recovery
+- **Authentication** — the role dropdown was replaced with scrypt-hashed sign-in and
+  `HttpOnly` session cookies; the server derives the role from the session and ignores any
+  `role` sent by the client
 
-Testing: `npm test` (34 unit), `npm run stress` (41 adversarial checks against a live server),
-`npm run verify` (ledger integrity). See [`TESTING.md`](./TESTING.md).
+Testing: `npm test` (45 unit), `npm run stress` (54 adversarial checks — it starts its own
+server if none is running), `npm run verify` (ledger integrity). See [`TESTING.md`](./TESTING.md).
+
+Demo logins are listed on the sign-in page. Password for all of them: `demo1234`.
 Running the demo, screen by screen: [`DEMO.md`](./DEMO.md).
 
 Next: demo rehearsal (Phase 6).
@@ -95,5 +101,6 @@ The full phase plan, including the Indian-context revision that introduced the A
 
 ## Not in scope
 
-No real blockchain deployment, no PFMS or Treasury integration, no map tile APIs, no real
-authentication. The payment trigger is a logged simulated event. See `DECISIONS.md`.
+No real blockchain deployment, no PFMS or Treasury integration, no map tile APIs. Sign-in is
+real but demo-scale: fixed accounts, one shared password, in-memory sessions. The payment
+trigger is a logged simulated event. See `DECISIONS.md`.

@@ -20,8 +20,8 @@
     </table>
   </div>
 
-  <h2>New DPR submission</h2>
-  <div class="card">
+  <h2 id="dprHead" hidden>New DPR submission</h2>
+  <div class="card" id="dprCard" hidden>
     <form id="dpr">
       <div class="rowsplit">
         <div class="field">
@@ -52,8 +52,9 @@
 </main>
 
 <script type="module">
-import { mountHeader, api, esc, money, toast } from '/common.js';
+import { mountHeader, requireUser, getRole, api, esc, money, toast } from '/common.js';
 
+await requireUser();
 mountHeader('/');
 const rows = document.getElementById('rows');
 
@@ -103,6 +104,11 @@ document.getElementById('dpr').addEventListener('submit', async e => {
     load();
   } catch (err) { toast(err.message, 'danger'); }
 });
+
+if (getRole() === 'JE') {
+  document.getElementById('dprHead').hidden = false;
+  document.getElementById('dprCard').hidden = false;
+}
 
 load();
 </script>

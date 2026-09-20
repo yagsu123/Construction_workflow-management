@@ -2,11 +2,6 @@
 
 ## Starting it — read this first
 
-You need **two PowerShell windows**. The stress test talks to a running server; if the server
-is not up you get `ECONNREFUSED`, which is what "fetch failed" means.
-
-**Window 1 — the server. Leave it running.**
-
 ```powershell
 cd C:\Users\tcpladmin255\OneDrive\Desktop\construction_project_hackathon
 npm run seed
@@ -20,13 +15,18 @@ You should see:
   http://localhost:3000
 ```
 
-**Window 2 — everything else.**
+Leave that running and open the site. `npm test`, `npm run stress` and `npm run verify` can all
+be run from a second window — or from the same one after you stop the server with Ctrl+C, since
+the stress test starts its own if none is running.
 
-```powershell
-npm run stress     # needs window 1 running
-npm test           # does not
-npm run verify     # does not
-```
+**Sign in.** The login page lists four accounts; the password for all of them is `demo1234`.
+
+| Account | Role |
+|---|---|
+| `je.patel` | Junior Engineer |
+| `ae.shah` | Assistant Engineer / SDO |
+| `fin.desai` | Finance / Accounts |
+| `ee.mehta` | Executive Engineer |
 
 If the browser shows an old version, **hard-refresh with Ctrl+Shift+R** — the browser caches
 `common.js` and will happily keep showing you a stale page.
@@ -72,15 +72,24 @@ Open it. The stepper shows it at **EE Final Approval**, with JE, AE and Finance 
 
 Now demonstrate that roles are enforced, not decorative:
 
-1. Set **Acting as** to **JE** → no buttons. *"It's not with him."*
-2. Set to **Finance** → no buttons.
-3. Set to **EE** → **Grant final approval** appears. Click it.
+1. Signed in as `je.patel` → no buttons. *"It's not with him."*
+2. Sign out, sign in as `fin.desai` → no buttons.
+3. Sign in as `ee.mehta` → **Grant final approval** appears. Click it.
 4. **Execute smart contract** appears. Click it.
 
 Scroll to the timeline: two new entries, each with `prev_hash → hash`.
 
-**Say this:** *"Four roles, one file, and nobody can act out of turn — the server refuses it,
-not just the button."*
+**Say this:** *"Four roles, one file, and nobody can act out of turn. And this isn't a dropdown —
+each role is a separate login. The server works out who you are from your session; if you send it
+a request claiming to be the Executive Engineer, it ignores you."*
+
+If a judge is technical, show them:
+
+```powershell
+curl -i -X POST http://localhost:3000/api/projects/4/action -H "content-type: application/json" -d "{\"role\":\"EE\",\"action\":\"approve\"}"
+```
+
+`401 Not signed in`.
 
 ### 3. Rejection is recorded (45 sec) — **PWD/2026/002**
 
@@ -95,7 +104,7 @@ the JE's corrected re-measurement right after it."*
 
 ### 4. The site photo (30 sec) — **PWD/2026/001**
 
-Open it as the **JE**. Each e-MB entry shows the photo, the coordinates as a link to the real
+Sign in as `je.patel`. Each e-MB entry shows the photo, the coordinates as a link to the real
 map location, and the photo's own hash.
 
 **Say this:** *"The measurement isn't a number somebody typed. It's a photo, at a location, at a
@@ -162,4 +171,5 @@ Wipes everything and rebuilds it, anchors included.
 | Page looks like an older version | Browser cache. **Ctrl+Shift+R**. |
 | "No projects found" | Empty database. `npm run seed`. |
 | Location fix fails | Geolocation needs `localhost` or HTTPS, and browser permission. |
+| Sent to the login page | Session expired (8 h) or the server restarted — sessions are in memory. |
 | Days-in-stage all read 0 | You re-seeded; the dates are relative to seed time. That's expected. |

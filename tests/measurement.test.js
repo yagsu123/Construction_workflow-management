@@ -37,6 +37,17 @@ test('saveDataUrl rejects anything that is not an image data URL', () => {
   assert.throws(() => saveDataUrl(''), /JPEG, PNG or WebP/);
 });
 
+test('re-uploading a genuine photo repairs a file that was swapped on disk', () => {
+  const first = saveDataUrl(PNG);
+  const file = path.join(UPLOAD_DIR, path.basename(first.url));
+  fs.writeFileSync(file, Buffer.from('a different photo entirely'));
+
+  const again = saveDataUrl(PNG);
+  assert.equal(again.sha256, first.sha256);
+  assert.equal(photoStillMatches(again.url, again.sha256).matches, true,
+    'dedup must verify the bytes, not just the filename');
+});
+
 test('photoStillMatches detects a swapped image file on disk', () => {
   const saved = saveDataUrl(PNG);
   assert.deepEqual(photoStillMatches(saved.url, saved.sha256), { present: true, matches: true, actual: saved.sha256 });
@@ -45,7 +56,7 @@ test('photoStillMatches detects a swapped image file on disk', () => {
   fs.writeFileSync(file, Buffer.from('a different photo entirely'));
   const after = photoStillMatches(saved.url, saved.sha256);
   assert.equal(after.matches, false, 'swapping the file must be detected');
-  fs.unlinkSync(file);
+  saveDataUrl(PNG);   // restore, so a failed run cannot poison the next one
 
   assert.deepEqual(photoStillMatches('/uploads/missing.png', 'x'), { present: false, matches: false });
 });

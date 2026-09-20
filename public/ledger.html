@@ -22,9 +22,10 @@
 </main>
 
 <script type="module">
-import { mountHeader, api, esc, when, shortHash } from '/common.js';
+import { mountHeader, requireUser, api, esc, when, shortHash } from '/common.js';
 import { coords, osmLink } from '/emb.js';
 
+await requireUser();
 mountHeader('/ledger.html');
 const status = document.getElementById('status');
 const rows = document.getElementById('rows');

@@ -14,8 +14,9 @@
 </main>
 
 <script type="module">
-import { mountHeader, api, esc, money } from '/common.js';
+import { mountHeader, requireUser, api, esc, money } from '/common.js';
 
+await requireUser();
 mountHeader('/dashboard.html');
 const body = document.getElementById('body');
 

@@ -10,6 +10,7 @@
 import fs from 'node:fs';
 import { createHash } from 'node:crypto';
 import { getDb, resetDb } from '../src/db.js';
+import { actorId } from '../src/auth.js';
 import { appendLedgerEntry, setAnchorSink } from '../src/ledger.js';
 import { writeAnchor } from '../src/anchor.js';
 import { ANCHOR_PATH } from '../src/config.js';
@@ -43,13 +44,19 @@ function project({ code, title, budget, department, contractor, stage, enteredDa
   `).run(code, title, budget, department, contractor, stage, ago(enteredDaysAgo), ago(createdDaysAgo)).lastInsertRowid);
 }
 
+// The same accounts the login page offers, so seeded history and live clicks look identical.
+const ACCOUNT = { JE: 'je.patel', AE: 'ae.shah', FIN: 'fin.desai', EE: 'ee.mehta' };
+
 const approve = (id, stage, role, status, comment, daysAgo) =>
-  appendLedgerEntry(db, 'APPROVAL', { project_id: id, stage, actor_role: role, status, comment, timestamp: ago(daysAgo) });
+  appendLedgerEntry(db, 'APPROVAL', {
+    project_id: id, stage, actor_role: role, actor_user: actorId(ACCOUNT[role]),
+    status, comment, timestamp: ago(daysAgo),
+  });
 
 const emb = (id, lat, lng, note, daysAgo) =>
   appendLedgerEntry(db, 'MEASUREMENT', {
     project_id: id, photo_url: PHOTO_URL, photo_sha256: PHOTO_SHA,
-    lat, lng, note, actor_role: 'JE', timestamp: ago(daysAgo),
+    lat, lng, note, actor_role: 'JE', actor_user: actorId(ACCOUNT.JE), timestamp: ago(daysAgo),
   });
 
 // ── 1. The star of the demo: rotting at the AE test-check ────────────────────────────────────

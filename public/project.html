@@ -13,9 +13,10 @@
 </main>
 
 <script type="module">
-import { mountHeader, api, getRole, esc, money, when, shortHash, toast, STATUS_TONE } from '/common.js';
+import { mountHeader, requireUser, api, getRole, esc, money, when, shortHash, toast, STATUS_TONE } from '/common.js';
 import { compressToDataUrl, getPosition, osmLink, coords } from '/emb.js';
 
+await requireUser();
 mountHeader('/');
 
 const id = new URLSearchParams(location.search).get('id');
@@ -73,8 +74,8 @@ function actionPanel(project, available) {
     return `<p class="muted">Smart contract executed — the payment trigger is recorded on the ledger. Nothing further to do.</p>`;
   }
   if (!available.length) {
-    return `<p class="muted">You are acting as <span class="pill">${esc(role)}</span>. This project is with
-      <span class="pill">${esc(project.waiting_on ?? '—')}</span> — switch role in the header to act on it.</p>`;
+    return `<p class="muted">You are acting as <span class="pill">${esc(role)}</span>. This file is with
+      <span class="pill">${esc(project.waiting_on ?? '—')}</span> — it is not yours to act on.</p>`;
   }
   const needsComment = available.some(a => a.needsComment);
   return `
@@ -91,7 +92,7 @@ function embCard(project) {
   if (getRole() !== 'JE') {
     return `<h2>Geo-tagged e-MB</h2>
       <div class="card"><p class="muted" style="margin:0">Site measurements are recorded by the JE.
-      Switch role in the header to add one.</p></div>`;
+      You are signed in as ${esc(getRole())}.</p></div>`;
   }
   if (project.current_stage === 'PAYMENT_TRIGGERED') {
     return `<h2>Geo-tagged e-MB</h2>
@@ -154,7 +155,7 @@ function wireEmb() {
       const photo = await compressToDataUrl(document.getElementById('photo').files[0]);
       const r = await api(`/api/projects/${id}/measurement`, {
         method: 'POST',
-        body: { role: getRole(), photo, lat: fix.lat, lng: fix.lng, note: document.getElementById('note').value },
+        body: { photo, lat: fix.lat, lng: fix.lng, note: document.getElementById('note').value },
       });
       toast(`e-MB recorded on the ledger at seq ${r.entry.seq}`);
       render();
@@ -204,7 +205,7 @@ async function render() {
       try {
         const r = await api(`/api/projects/${id}/action`, {
           method: 'POST',
-          body: { role: getRole(), action: btn.dataset.action, comment },
+          body: { action: btn.dataset.action, comment },
         });
         toast(`Recorded on the ledger at seq ${r.entry.seq} — now ${r.moved_to.replace(/_/g, ' ')}`);
         render();

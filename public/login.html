@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sign in — PWD Infrastructure Workflow</title>
+<link rel="stylesheet" href="/app.css">
+</head>
+<body>
+<div class="login-wrap">
+  <h1>PWD Infrastructure Workflow</h1>
+  <p class="lede">Sign in. Your role comes from your account — it is not something the browser can choose.</p>
+
+  <div class="card">
+    <p class="error" id="error" hidden></p>
+    <form id="login">
+      <div class="field">
+        <label for="username">Username</label>
+        <input id="username" name="username" autocomplete="username" required autofocus>
+      </div>
+      <div class="field">
+        <label for="password">Password</label>
+        <input id="password" name="password" type="password" autocomplete="current-password" required>
+      </div>
+      <button class="primary" type="submit" id="submit" style="width:100%">Sign in</button>
+    </form>
+  </div>
+
+  <h2>Demo accounts</h2>
+  <div class="card">
+    <ul class="accounts" id="accounts"><li class="muted">Loading…</li></ul>
+    <p class="muted" style="font-size:12.5px;margin:12px 0 0" id="pwhint"></p>
+  </div>
+</div>
+
+<script type="module">
+import { api, esc, toast } from '/common.js';
+
+const form = document.getElementById('login');
+const errorEl = document.getElementById('error');
+const next = new URLSearchParams(location.search).get('next') || '/';
+
+fetch('/api/demo-accounts').then(r => r.json()).then(({ accounts, password }) => {
+  document.getElementById('accounts').innerHTML = accounts.map(a => `
+    <li>
+      <span class="pill">${esc(a.role)}</span>
+      <span><strong>${esc(a.name)}</strong> — <span class="mono">${esc(a.username)}</span>
+        <div class="muted" style="font-size:12px">${esc(a.designation)}</div></span>
+      <button type="button" data-u="${esc(a.username)}">Use</button>
+    </li>`).join('');
+  document.getElementById('pwhint').textContent =
+    `Password for all demo accounts: ${password} — it still has to be typed; the server checks a scrypt hash.`;
+
+  document.querySelectorAll('.accounts button').forEach(b => {
+    b.addEventListener('click', () => {
+      document.getElementById('username').value = b.dataset.u;
+      document.getElementById('password').focus();
+    });
+  });
+}).catch(() => { document.getElementById('accounts').innerHTML = '<li class="muted">Could not load accounts.</li>'; });
+
+form.addEventListener('submit', async e => {
+  e.preventDefault();
+  errorEl.hidden = true;
+  document.getElementById('submit').disabled = true;
+  try {
+    await api('/api/login', {
+      method: 'POST',
+      body: { username: form.username.value, password: form.password.value },
+    });
+    location.href = next.startsWith('/') ? next : '/';
+  } catch (err) {
+    errorEl.textContent = err.message;
+    errorEl.hidden = false;
+    form.password.value = '';
+    document.getElementById('submit').disabled = false;
+  }
+});
+</script>
+</body>
+</html>

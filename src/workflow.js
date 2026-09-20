@@ -79,7 +79,7 @@ export function getProject(db, id) {
  * Take an action on a project as a role. Validates the transition, appends to the
  * ledger, and moves the project's stage. Throws WorkflowError on an illegal move.
  */
-export function act(db, { projectId, role, action, comment = '' }) {
+export function act(db, { projectId, role, actorUser = '', action, comment = '' }) {
   const project = getProject(db, projectId);
   const available = actionsFor(project.current_stage, role);
   const t = available.find(a => a.action === action);
@@ -100,6 +100,7 @@ export function act(db, { projectId, role, action, comment = '' }) {
     project_id: project.id,
     stage: project.current_stage,
     actor_role: role,
+    actor_user: actorUser,
     status: t.status,
     comment: String(comment).trim(),
   });
@@ -115,7 +116,7 @@ export function act(db, { projectId, role, action, comment = '' }) {
  * the smart contract has fired. The photo's own SHA-256 goes into the ledger payload, so
  * swapping the image file on disk is detectable too.
  */
-export function recordMeasurement(db, { projectId, role, photo_url, photo_sha256, lat, lng, note = '' }) {
+export function recordMeasurement(db, { projectId, role, actorUser = '', photo_url, photo_sha256, lat, lng, note = '' }) {
   const project = getProject(db, projectId);
 
   if (role !== 'JE') throw new WorkflowError(`Only the JE records site measurements — you are acting as ${role}.`);
@@ -138,6 +139,7 @@ export function recordMeasurement(db, { projectId, role, photo_url, photo_sha256
     lat: latitude, lng: longitude,
     note: String(note).trim(),
     actor_role: 'JE',
+    actor_user: actorUser,
   });
 
   return { project: getProject(db, project.id), entry };

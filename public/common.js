@@ -2,14 +2,28 @@
 
 export const GENESIS = '0'.repeat(64);
 
-// --- current role (a demo convenience, not auth) -------------------------------------------
-const ROLE_KEY = 'pwd.role';
+// --- who you are ----------------------------------------------------------------------------
+// The role used to come from a dropdown, which meant the client decided its own permissions.
+// It now comes from the server, from a session that required a password. There is no setter.
+let currentUser = null;
 
-export function getRole() {
-  try { return localStorage.getItem(ROLE_KEY) || 'JE'; } catch { return 'JE'; }
+export const getUser = () => currentUser;
+export const getRole = () => currentUser?.role ?? null;
+
+/** Load the signed-in user, or send the visitor to the login page. */
+export async function requireUser() {
+  const res = await fetch('/api/me');
+  if (res.status === 401) {
+    location.href = `/login.html?next=${encodeURIComponent(location.pathname + location.search)}`;
+    return new Promise(() => {});          // navigation in flight; never resolve
+  }
+  currentUser = (await res.json()).user;
+  return currentUser;
 }
-export function setRole(role) {
-  try { localStorage.setItem(ROLE_KEY, role); } catch { /* private mode — role resets on reload */ }
+
+export async function signOut() {
+  await fetch('/api/logout', { method: 'POST' });
+  location.href = '/login.html';
 }
 
 // --- fetch ----------------------------------------------------------------------------------
@@ -61,9 +75,9 @@ const NAV = [
   ['/dashboard.html', 'Delay dashboard'],
 ];
 
-/** Render the shared top bar, including the role switcher. Reloads the page on role change. */
-export function mountHeader(current, { onRoleChange } = {}) {
-  const role = getRole();
+/** Render the shared top bar. Identity is displayed, not chosen. */
+export function mountHeader(current) {
+  const user = currentUser;
   const header = document.createElement('header');
   header.className = 'topbar';
   header.innerHTML = `
@@ -75,22 +89,16 @@ export function mountHeader(current, { onRoleChange } = {}) {
       ${NAV.map(([href, label]) =>
         `<a href="${href}"${href === current ? ' aria-current="page"' : ''}>${label}</a>`).join('')}
     </nav>
-    <div class="rolebox">
-      <label for="roleSelect">Acting as</label>
-      <select id="roleSelect">
-        <option value="JE"${role === 'JE' ? ' selected' : ''}>JE — Junior Engineer</option>
-        <option value="AE"${role === 'AE' ? ' selected' : ''}>AE — Assistant Engineer / SDO</option>
-        <option value="FIN"${role === 'FIN' ? ' selected' : ''}>FIN — Finance / Accounts</option>
-        <option value="EE"${role === 'EE' ? ' selected' : ''}>EE — Executive Engineer</option>
-      </select>
+    <div class="whoami">
+      <div>
+        <span class="pill">${esc(user?.role ?? '—')}</span>
+        <strong>${esc(user?.name ?? 'Not signed in')}</strong>
+        <div class="meta">${esc(user?.designation ?? '')}</div>
+      </div>
+      <button id="signout" type="button">Sign out</button>
     </div>`;
   document.body.prepend(header);
-
-  header.querySelector('#roleSelect').addEventListener('change', e => {
-    setRole(e.target.value);
-    if (onRoleChange) onRoleChange(e.target.value);
-    else location.reload();
-  });
+  header.querySelector('#signout').addEventListener('click', signOut);
   return header;
 }
 

@@ -32,7 +32,16 @@ export function saveDataUrl(dataUrl) {
 
   fs.mkdirSync(UPLOAD_DIR, { recursive: true });
   const dest = path.join(UPLOAD_DIR, filename);
-  if (!fs.existsSync(dest)) fs.writeFileSync(dest, buf);
+
+  // Dedup, but verify rather than assume. A file named after a hash is not necessarily a file
+  // WITH that hash any more - if someone swapped the bytes on disk, re-uploading the genuine
+  // photo must restore it, not silently adopt the tampered copy.
+  let write = true;
+  if (fs.existsSync(dest)) {
+    const onDisk = createHash('sha256').update(fs.readFileSync(dest)).digest('hex');
+    write = onDisk !== sha256;
+  }
+  if (write) fs.writeFileSync(dest, buf);
 
   return { url: `/uploads/${filename}`, sha256, bytes: buf.length };
 }
