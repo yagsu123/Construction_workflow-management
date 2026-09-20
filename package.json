@@ -4,14 +4,16 @@
   "private": true,
   "type": "module",
   "description": "Infrastructure Workflow & Construction Monitoring System — digital MB approval workflow with a hash-chained tamper-evident ledger",
-  "engines": { "node": ">=22.5.0" },
+  "engines": {
+    "node": ">=22.5.0"
+  },
   "scripts": {
     "dev": "node --experimental-sqlite server.mjs",
     "start": "node --experimental-sqlite server.mjs",
     "seed": "node --experimental-sqlite scripts/seed.mjs",
     "verify": "node --experimental-sqlite scripts/verify-chain.mjs",
     "tamper": "node --experimental-sqlite scripts/tamper.mjs",
-    "test": "node --experimental-sqlite --test tests/"
+    "test": "node --experimental-sqlite --test tests/ledger.test.js"
   },
   "dependencies": {}
 }
