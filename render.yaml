@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: infraledger
+    runtime: node
+    plan: free
+    buildCommand: npm ci
+    # Seeding on boot means every cold start comes up with the demo dataset.
+    # Drop `npm run seed &&` once you attach a persistent disk.
+    startCommand: npm run seed && npm start
+    envVars:
+      # Pinned deliberately. `--experimental-sqlite` in package.json's start script
+      # is a Node 22 flag; a newer major may reject it as an unknown option and the
+      # service will fail to boot with no obvious cause.
+      - key: NODE_VERSION
+        value: 22.14.0
