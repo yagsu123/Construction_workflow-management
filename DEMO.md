@@ -25,7 +25,7 @@ the stress test starts its own if none is running.
 |---|---|
 | `je.patel` | Junior Engineer |
 | `ae.shah` | Assistant Engineer / SDO |
-| `fin.desai` | Finance / Accounts |
+| `dee.desai` | Deputy Executive Engineer |
 | `ee.mehta` | Executive Engineer |
 
 If the browser shows an old version, **hard-refresh with Ctrl+Shift+R** — the browser caches
@@ -40,8 +40,8 @@ If the browser shows an old version, **hard-refresh with Ctrl+Shift+R** — the 
 | Code | Sitting at | Days | Why it's there |
 |---|---|---|---|
 | PWD/2026/001 | AE test-check | **23** | Past SLA — the headline |
-| PWD/2026/002 | Finance | 9 | Was rejected by the AE, then fixed and resubmitted |
-| PWD/2026/003 | Finance | **11** | Past SLA |
+| PWD/2026/002 | DEE | 9 | Was rejected by the AE, then fixed and resubmitted |
+| PWD/2026/003 | DEE | **11** | Past SLA |
 | PWD/2026/004 | EE approval | 2 | **Click this one through live** |
 | PWD/2026/005 | Done | 1 | Full chain, start to finish |
 
@@ -57,7 +57,7 @@ Then point at *Where files are waiting*:
 
 ```
 AE    1 file    1 past SLA    avg 23 d    worst 23 d
-FIN   2 files   2 past SLA    avg 10 d    worst 11 d
+DEE   2 files   2 past SLA    avg 10 d    worst 11 d
 EE    1 file    0 past SLA    avg  2 d    worst  2 d
 ```
 
@@ -68,12 +68,12 @@ That's the whole anti-corruption argument. Delay becomes attributable.
 
 ### 2. The workflow (90 sec) — **PWD/2026/004**
 
-Open it. The stepper shows it at **EE Final Approval**, with JE, AE and Finance behind it.
+Open it. The stepper shows it at **EE Final Approval**, with JE, AE and the DEE behind it.
 
 Now demonstrate that roles are enforced, not decorative:
 
 1. Signed in as `je.patel` → no buttons. *"It's not with him."*
-2. Sign out, sign in as `fin.desai` → no buttons.
+2. Sign out, sign in as `dee.desai` → no buttons.
 3. Sign in as `ee.mehta` → **Grant final approval** appears. Click it.
 4. **Execute smart contract** appears. Click it.
 
